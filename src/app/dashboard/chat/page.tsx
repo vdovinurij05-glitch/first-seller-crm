@@ -90,8 +90,13 @@ export default function ChatPage() {
         const data = await res.json()
         const newMessages = data.messages || []
 
-        // Обновляем только если количество сообщений изменилось
-        if (newMessages.length !== activeMessages.length) {
+        // Проверяем нужно ли обновлять
+        const shouldUpdate =
+          newMessages.length !== activeMessages.length ||
+          (newMessages.length > 0 && activeMessages.length > 0 &&
+           newMessages[newMessages.length - 1]?.id !== activeMessages[activeMessages.length - 1]?.id)
+
+        if (shouldUpdate) {
           setMessages(activeContactId, newMessages)
         }
       } catch (error) {
@@ -104,7 +109,7 @@ export default function ChatPage() {
 
     // Очищаем interval при размонтировании или смене контакта
     return () => clearInterval(interval)
-  }, [activeContactId, activeMessages.length, setMessages])
+  }, [activeContactId, activeMessages, setMessages])
 
   // Скролл к последнему сообщению
   useEffect(() => {
