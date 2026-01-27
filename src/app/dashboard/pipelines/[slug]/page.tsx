@@ -175,11 +175,16 @@ export default function PipelinePage() {
       const result = await res.json()
       console.log('✅ API Success:', result)
 
-      // Обновляем список после успешного сохранения
-      await fetchDeals()
+      // Не перезагружаем список - используем оптимистичное обновление
+      // Обновляем только полученную сделку
+      setDeals((prevDeals) =>
+        prevDeals.map((deal) =>
+          deal.id === dealId ? { ...deal, ...result.deal } : deal
+        )
+      )
     } catch (error) {
       console.error('❌ Error updating deal stage:', error)
-      // При ошибке откатываем изменения
+      // При ошибке откатываем изменения, перезагружая список
       await fetchDeals()
     }
   }
