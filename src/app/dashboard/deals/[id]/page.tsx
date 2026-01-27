@@ -795,7 +795,7 @@ export default function DealDetailPage() {
                     </p>
                   </div>
                 </div>
-                  );
+                  )
                 } else {
                   // Рендер комментария или системного события
                   const comment = item as Comment & { itemType: 'comment' }
