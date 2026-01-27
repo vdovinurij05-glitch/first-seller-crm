@@ -1,5 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { GripVertical } from 'lucide-react'
 import DealCard from './DealCard'
 
 interface Deal {
@@ -46,10 +47,21 @@ export default function DraggableDealCard({ deal, onClick }: DraggableDealCardPr
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
+      className="relative group"
     >
-      <DealCard deal={deal} onClick={onClick} />
+      {/* Drag Handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10"
+      >
+        <GripVertical className="w-4 h-4 text-gray-400" />
+      </div>
+
+      {/* Deal Card */}
+      <div className="pl-2">
+        <DealCard deal={deal} onClick={onClick} />
+      </div>
     </div>
   )
 }

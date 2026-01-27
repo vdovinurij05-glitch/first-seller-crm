@@ -256,7 +256,11 @@ export default function PipelinePage() {
                 >
                   <div className="space-y-3 min-h-[200px]">
                     {stageDeals.map((deal) => (
-                      <DraggableDealCard key={deal.id} deal={deal} />
+                      <DraggableDealCard
+                        key={deal.id}
+                        deal={deal}
+                        onClick={() => router.push(`/dashboard/deals/${deal.id}`)}
+                      />
                     ))}
                   </div>
                 </SortableContext>
