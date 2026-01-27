@@ -471,15 +471,13 @@ export async function sendTelegramFile(
   }
 }
 
-// Webhook handler для Next.js API route
-export const telegramWebhook = webhookCallback(bot, 'std/http')
+// Webhook handler для Next.js API route (закомментировано, т.к. требуется HTTPS)
+// export const telegramWebhook = webhookCallback(bot, 'std/http')
 
-// Запуск бота в polling режиме (для разработки)
+// Запуск бота в polling режиме
 export async function startBot() {
-  if (process.env.NODE_ENV === 'development') {
-    await bot.start()
-    console.log('Telegram bot started in polling mode')
-  }
+  await bot.start()
+  console.log('✅ Telegram bot started in polling mode')
 }
 
 export { bot }
