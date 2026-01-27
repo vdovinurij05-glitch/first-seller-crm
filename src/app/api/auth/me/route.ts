@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     // Верифицируем токен
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || 'secret'
+      process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || 'secret'
     ) as { id: string; email: string; role: string }
 
     // Получаем пользователя из базы
