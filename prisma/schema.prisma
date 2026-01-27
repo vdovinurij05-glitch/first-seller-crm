@@ -54,7 +54,44 @@ model Contact {
   @@map("contacts")
 }
 
-// Этапы сделок
+// Воронки продаж
+model Pipeline {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  icon      String?
+  order     Int      @default(0)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Связи
+  deals     Deal[]
+  stages    PipelineStage[]
+
+  @@map("pipelines")
+}
+
+// Этапы воронок
+model PipelineStage {
+  id         String   @id @default(cuid())
+  name       String
+  slug       String
+  color      String
+  order      Int      @default(0)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Связи
+  pipelineId String
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@unique([pipelineId, slug])
+  @@map("pipeline_stages")
+}
+
+// Этапы сделок (deprecated - будет удалено)
 model Stage {
   id        String   @id @default(cuid())
   name      String
@@ -81,6 +118,8 @@ model Deal {
   updatedAt   DateTime    @updatedAt
 
   // Связи
+  pipelineId  String?
+  pipeline    Pipeline?   @relation(fields: [pipelineId], references: [id])
   contactId   String?
   contact     Contact?    @relation(fields: [contactId], references: [id])
   managerId   String?

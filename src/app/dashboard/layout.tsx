@@ -9,7 +9,7 @@ import {
   MessageSquare,
   Users,
   Phone,
-  Briefcase,
+  Filter,
   Settings,
   LogOut,
   Menu,
@@ -31,7 +31,7 @@ const navigation = [
   { name: 'Чат', href: '/dashboard/chat', icon: MessageSquare },
   { name: 'Контакты', href: '/dashboard/contacts', icon: Users },
   { name: 'Звонки', href: '/dashboard/calls', icon: Phone },
-  { name: 'Сделки', href: '/dashboard/deals', icon: Briefcase },
+  { name: 'Воронки', href: '/dashboard/pipelines', icon: Filter },
   { name: 'Настройки', href: '/dashboard/settings', icon: Settings },
 ]
 
