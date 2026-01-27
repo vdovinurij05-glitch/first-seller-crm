@@ -1,6 +1,7 @@
 import { Bot, Context, webhookCallback } from 'grammy'
 import prisma from '@/lib/prisma'
 import fs from 'fs/promises'
+import * as fsSync from 'fs'
 import path from 'path'
 import https from 'https'
 
@@ -38,7 +39,7 @@ async function downloadTelegramFile(fileId: string, filename: string): Promise<s
 
     await new Promise<void>((resolve, reject) => {
       https.get(fileUrl, (response) => {
-        const fileStream = fs.createWriteStream(filePath)
+        const fileStream = fsSync.createWriteStream(filePath)
         response.pipe(fileStream)
         fileStream.on('finish', () => {
           fileStream.close()
