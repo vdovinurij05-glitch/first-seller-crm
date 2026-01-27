@@ -269,7 +269,7 @@ export default function PipelinePage() {
                   items={stageDeals.map((d) => d.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="space-y-3 min-h-[200px]">
+                  <div className="space-y-3 min-h-[200px] mt-8">
                     {stageDeals.map((deal) => (
                       <DraggableDealCard
                         key={deal.id}
