@@ -12,7 +12,7 @@ if (!TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN') {
 async function startPolling() {
   try {
     console.log('🚀 Запуск Telegram бота в polling режиме...')
-    console.log('📱 Токен:', TELEGRAM_BOT_TOKEN.substring(0, 10) + '...')
+    console.log('📱 Токен:', TELEGRAM_BOT_TOKEN!.substring(0, 10) + '...')
 
     // Сначала удаляем webhook если он есть
     console.log('🗑️  Удаление webhook (если установлен)...')
