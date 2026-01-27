@@ -95,16 +95,20 @@ export default function DashboardLayout({
 
           if (newMessages.length > 0) {
             // Добавляем новые уведомления
-            const newNotifications: NotificationData[] = newMessages.map((msg: any) => ({
-              id: msg.id,
-              content: msg.content,
-              dealId: msg.dealId,
-              dealTitle: msg.deal?.title || 'Сделка',
-              contactName: msg.contact?.name || 'Контакт',
-              contactUsername: msg.contact?.telegramUsername
-            }))
+            const newNotifications: NotificationData[] = newMessages
+              .filter((msg: any) => msg.deal?.id) // Только сообщения со сделками
+              .map((msg: any) => ({
+                id: msg.id,
+                content: msg.content,
+                dealId: msg.deal.id,
+                dealTitle: msg.deal.title || 'Сделка',
+                contactName: msg.contact?.name || 'Контакт',
+                contactUsername: msg.contact?.telegramUsername
+              }))
 
-            setNotifications((prev) => [...prev, ...newNotifications])
+            if (newNotifications.length > 0) {
+              setNotifications((prev) => [...prev, ...newNotifications])
+            }
 
             // Добавляем в список показанных
             newMessages.forEach((msg: any) => {
