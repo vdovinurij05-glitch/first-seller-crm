@@ -149,15 +149,22 @@ model Attachment {
 // Звонки (Mango Office)
 model Call {
   id              String        @id @default(cuid())
-  mangoCallId     String        @unique
-  direction       String
-  phone           String
-  duration        Int?
-  status          String        @default("INITIATED")
-  recordingUrl    String?
+  externalId      String?       @unique  // entry_id из Mango
+  mangoCallId     String?       @unique  // call_id из Mango
+  direction       String        // IN | OUT
+  phone           String?       // Номер клиента (deprecated, используйте fromNumber/toNumber)
+  fromNumber      String?       // Номер звонящего
+  toNumber        String?       // Номер принимающего
+  duration        Int?          @default(0) // Длительность в секундах
+  status          String        @default("INITIATED") // INITIATED | RINGING | CONNECTED | COMPLETED | MISSED | BUSY
+  result          String?       // Результат звонка
+  recordingUrl    String?       // URL или ID записи
   createdAt       DateTime      @default(now())
-  answeredAt      DateTime?
-  endedAt         DateTime?
+  startTime       DateTime?     // Время начала звонка
+  connectedTime   DateTime?     // Время соединения
+  answeredAt      DateTime?     // Время ответа (deprecated, используйте connectedTime)
+  endTime         DateTime?     // Время завершения
+  endedAt         DateTime?     // Время завершения (deprecated, используйте endTime)
 
   // Связи
   contactId       String?

@@ -113,6 +113,104 @@ export async function initiateCall(
   }
 }
 
+// Получение истории звонков контакта из Mango Office
+export async function getContactCallHistory(
+  phoneNumber: string,
+  dateFrom?: Date,
+  dateTo?: Date
+): Promise<any[]> {
+  try {
+    const from = dateFrom || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 30 дней назад
+    const to = dateTo || new Date()
+
+    const data = {
+      date_from: Math.floor(from.getTime() / 1000),
+      date_to: Math.floor(to.getTime() / 1000),
+      fields: 'start,finish,from_number,to_number,disconnect_reason,line_number,location,entry_id,talk_duration',
+      request: {
+        or: [
+          { from_number: phoneNumber },
+          { to_number: phoneNumber }
+        ]
+      }
+    }
+
+    const response = await mangoRequest('/stats/request', data)
+    return response.data || []
+  } catch (error) {
+    console.error('Error getting contact call history:', error)
+    return []
+  }
+}
+
+// Синхронизация истории звонков контакта с базой данных
+export async function syncContactCallHistory(
+  contactId: string,
+  phoneNumber: string
+): Promise<void> {
+  try {
+    console.log(`🔄 Syncing call history for contact ${contactId}, phone ${phoneNumber}`)
+
+    // Получаем историю звонков за последние 30 дней
+    const callHistory = await getContactCallHistory(phoneNumber)
+
+    if (!callHistory || callHistory.length === 0) {
+      console.log('No call history found')
+      return
+    }
+
+    console.log(`📞 Found ${callHistory.length} calls in Mango for ${phoneNumber}`)
+
+    // Синхронизируем каждый звонок
+    for (const mangoCall of callHistory) {
+      try {
+        // Проверяем, существует ли уже этот звонок
+        const existingCall = await prisma.call.findFirst({
+          where: { externalId: mangoCall.entry_id }
+        })
+
+        if (existingCall) {
+          continue
+        }
+
+        // Определяем направление
+        const isIncoming = mangoCall.to_number === phoneNumber ||
+                          mangoCall.from_number !== phoneNumber
+
+        // Определяем статус
+        let status = 'COMPLETED'
+        if (mangoCall.disconnect_reason === 1103) status = 'MISSED'
+        else if (mangoCall.disconnect_reason === 1102) status = 'BUSY'
+        else if (!mangoCall.talk_duration) status = 'MISSED'
+
+        // Создаем запись звонка
+        await prisma.call.create({
+          data: {
+            externalId: mangoCall.entry_id,
+            direction: isIncoming ? 'IN' : 'OUT',
+            fromNumber: mangoCall.from_number,
+            toNumber: mangoCall.to_number,
+            status,
+            startTime: new Date(mangoCall.start * 1000),
+            endTime: mangoCall.finish ? new Date(mangoCall.finish * 1000) : new Date(),
+            duration: mangoCall.talk_duration || 0,
+            result: mangoCall.disconnect_reason ? String(mangoCall.disconnect_reason) : 'completed',
+            contactId
+          }
+        })
+
+        console.log(`✅ Created call record for ${mangoCall.entry_id}`)
+      } catch (error) {
+        console.error(`Error syncing call ${mangoCall.entry_id}:`, error)
+      }
+    }
+
+    console.log(`✅ Sync completed for contact ${contactId}`)
+  } catch (error) {
+    console.error('Error syncing contact call history:', error)
+  }
+}
+
 // Обработка webhook от Mango (события звонков)
 export interface MangoCallEvent {
   entry_id: string
@@ -167,16 +265,41 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
         }
       })
 
-      // Если контакт не найден, создаем новый
+      // Если контакт не найден и звонок входящий, создаем новый контакт и сделку
       if (!contact && isIncoming) {
-        await prisma.contact.create({
+        const newContact = await prisma.contact.create({
           data: {
             name: `Звонок: ${clientPhone}`,
             phone: clientPhone,
-            source: 'phone',
+            source: 'PHONE',
             status: 'NEW'
           }
         })
+
+        // Создаем сделку для нового контакта
+        const newDeal = await prisma.deal.create({
+          data: {
+            title: `Входящий звонок от ${clientPhone}`,
+            amount: 0,
+            stage: 'NEW',
+            probability: 50,
+            description: `Автоматически создана при входящем звонке\nНомер: ${clientPhone}\nДата звонка: ${new Date(timestamp * 1000).toLocaleString('ru-RU')}`,
+            contactId: newContact.id
+          }
+        })
+
+        // Обновляем звонок, связывая с новым контактом
+        await prisma.call.update({
+          where: { id: call.id },
+          data: { contactId: newContact.id }
+        })
+
+        // Синхронизируем историю звонков из Mango
+        setTimeout(async () => {
+          await syncContactCallHistory(newContact.id, clientPhone)
+        }, 1000)
+
+        console.log(`✅ Created new contact ${newContact.id} and deal ${newDeal.id} for incoming call`)
       }
     }
 
@@ -197,16 +320,57 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
                        disconnect_reason === 1102 ? 'BUSY' :
                        call.status === 'ANSWERED' ? 'COMPLETED' : 'MISSED'
 
+        const duration = call.answeredAt
+          ? Math.floor((timestamp * 1000 - call.answeredAt.getTime()) / 1000)
+          : 0
+
         await prisma.call.update({
           where: { id: call.id },
           data: {
             status,
             endedAt: new Date(timestamp * 1000),
-            duration: call.answeredAt
-              ? Math.floor((timestamp * 1000 - call.answeredAt.getTime()) / 1000)
-              : 0
+            duration
           }
         })
+
+        // Добавляем системное событие в сделку
+        if (call.contactId) {
+          const activeDeal = await prisma.deal.findFirst({
+            where: {
+              contactId: call.contactId,
+              closedAt: null
+            },
+            orderBy: {
+              updatedAt: 'desc'
+            }
+          })
+
+          if (activeDeal) {
+            const direction = isIncoming ? 'входящий' : 'исходящий'
+            const durationText = duration > 0
+              ? `${Math.floor(duration / 60)} мин ${duration % 60} сек`
+              : 'не состоялся'
+
+            await prisma.dealComment.create({
+              data: {
+                content: `Звонок (${direction}): ${durationText}`,
+                type: 'SYSTEM_EVENT',
+                eventType: isIncoming ? 'CALL_INCOMING' : 'CALL_OUTGOING',
+                metadata: JSON.stringify({
+                  callId: call_id,
+                  entryId: event.entry_id,
+                  duration,
+                  disconnectReason: disconnect_reason,
+                  status
+                }),
+                dealId: activeDeal.id
+              }
+            })
+
+            console.log(`✅ Created deal comment for call in deal ${activeDeal.id}`)
+          }
+        }
+
         break
     }
   } catch (error) {
