@@ -130,7 +130,7 @@ export async function transcribeCall(callId: string): Promise<boolean> {
         text,
         summary: analysis?.summary,
         sentiment: analysis?.sentiment,
-        keywords: analysis?.keywords || []
+        keywords: (analysis?.keywords || []).join(', ')
       }
     })
 
