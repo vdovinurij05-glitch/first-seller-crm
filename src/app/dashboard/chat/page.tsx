@@ -92,12 +92,17 @@ export default function ChatPage() {
   useEffect(() => {
     if (!activeContactId) return
 
+    console.log('🔄 Starting polling for contact:', activeContactId)
+
     const pollMessages = async () => {
       try {
+        console.log('📡 Polling messages...')
         const res = await fetch(`/api/messages?contactId=${activeContactId}`)
         const data = await res.json()
         const newMessages = data.messages || []
         const currentMessages = messagesRef.current
+
+        console.log('📊 Current messages:', currentMessages.length, 'New messages:', newMessages.length)
 
         // Проверяем нужно ли обновлять
         const shouldUpdate =
@@ -106,10 +111,13 @@ export default function ChatPage() {
            newMessages[newMessages.length - 1]?.id !== currentMessages[currentMessages.length - 1]?.id)
 
         if (shouldUpdate) {
+          console.log('✅ Updating messages!')
           setMessages(activeContactId, newMessages)
+        } else {
+          console.log('⏭️  No updates needed')
         }
       } catch (error) {
-        console.error('Error polling messages:', error)
+        console.error('❌ Error polling messages:', error)
       }
     }
 
@@ -119,8 +127,13 @@ export default function ChatPage() {
     // Запускаем polling каждые 3 секунды
     const interval = setInterval(pollMessages, 3000)
 
+    console.log('⏰ Interval created:', interval)
+
     // Очищаем interval при размонтировании или смене контакта
-    return () => clearInterval(interval)
+    return () => {
+      console.log('🛑 Clearing interval:', interval)
+      clearInterval(interval)
+    }
   }, [activeContactId, setMessages])
 
   // Скролл к последнему сообщению
