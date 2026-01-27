@@ -19,7 +19,9 @@ import {
   Image as ImageIcon,
   Music,
   Video,
-  Mic
+  Mic,
+  Activity,
+  CheckCircle2
 } from 'lucide-react'
 
 interface Deal {
@@ -64,6 +66,24 @@ interface Message {
   }
 }
 
+interface Comment {
+  id: string
+  content: string
+  type: string  // 'COMMENT' | 'SYSTEM_EVENT' | 'TELEGRAM_MESSAGE'
+  eventType?: string  // 'STAGE_CHANGED' | 'CALL_INCOMING' | etc
+  metadata?: string
+  createdAt: string
+  user?: {
+    id: string
+    name: string
+    avatar?: string
+  }
+}
+
+type ActivityItem = (Message | Comment) & {
+  itemType: 'message' | 'comment'
+}
+
 export default function DealDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -73,12 +93,14 @@ export default function DealDetailPage() {
 
   const [deal, setDeal] = useState<Deal | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
 
+  const [inputMode, setInputMode] = useState<'message' | 'comment'>('comment')
   const [messageContent, setMessageContent] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
@@ -111,6 +133,7 @@ export default function DealDetailPage() {
     if (dealId !== 'new') {
       fetchDeal()
       fetchMessages()
+      fetchComments()
     } else {
       // Для новой сделки устанавливаем режим редактирования
       setEditing(true)
@@ -128,7 +151,7 @@ export default function DealDetailPage() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, comments])
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -166,6 +189,18 @@ export default function DealDetailPage() {
       }
     } catch (error) {
       console.error('Error fetching messages:', error)
+    }
+  }
+
+  const fetchComments = async () => {
+    try {
+      const res = await fetch(`/api/deals/${dealId}/comments`)
+      if (res.ok) {
+        const data = await res.json()
+        setComments(data.comments || [])
+      }
+    } catch (error) {
+      console.error('Error fetching comments:', error)
     }
   }
 
@@ -226,6 +261,7 @@ export default function DealDetailPage() {
 
         if (res.ok) {
           await fetchDeal()
+          await fetchComments()  // Обновляем комментарии чтобы увидеть системные события
           setEditing(false)
         } else {
           alert('Ошибка при обновлении сделки')
@@ -246,57 +282,82 @@ export default function DealDetailPage() {
     }
   }
 
-  const handleSendMessage = async () => {
+  const handleSend = async () => {
     if (!messageContent.trim() && !selectedFile) return
-    if (!deal || !deal.contact?.telegramId) {
-      alert('У этого контакта нет Telegram ID')
-      return
-    }
 
     setSending(true)
     try {
-      if (selectedFile) {
-        // Отправка файла
-        const formData = new FormData()
-        formData.append('file', selectedFile)
-        if (messageContent.trim()) {
-          formData.append('caption', messageContent)
-        }
+      if (inputMode === 'comment') {
+        // Создаем комментарий
+        const sendToTelegram = deal?.contact?.telegramId ? confirm('Отправить это сообщение также в Telegram?') : false
 
-        const res = await fetch(`/api/deals/${dealId}/messages`, {
-          method: 'POST',
-          body: formData
-        })
-
-        if (res.ok) {
-          setMessageContent('')
-          setSelectedFile(null)
-          if (fileInputRef.current) {
-            fileInputRef.current.value = ''
-          }
-          await fetchMessages()
-        } else {
-          alert('Ошибка при отправке файла')
-        }
-      } else {
-        // Отправка текстового сообщения
-        const res = await fetch(`/api/deals/${dealId}/messages`, {
+        const res = await fetch(`/api/deals/${dealId}/comments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text: messageContent
+            content: messageContent,
+            type: 'COMMENT',
+            sendToTelegram,
+            userId: deal?.manager?.id
           })
         })
 
         if (res.ok) {
           setMessageContent('')
-          await fetchMessages()
+          await fetchComments()
         } else {
-          alert('Ошибка при отправке сообщения')
+          alert('Ошибка при создании комментария')
+        }
+      } else {
+        // Отправка в Telegram
+        if (!deal?.contact?.telegramId) {
+          alert('У этого контакта нет Telegram ID')
+          return
+        }
+
+        if (selectedFile) {
+          // Отправка файла
+          const formData = new FormData()
+          formData.append('file', selectedFile)
+          if (messageContent.trim()) {
+            formData.append('caption', messageContent)
+          }
+
+          const res = await fetch(`/api/deals/${dealId}/messages`, {
+            method: 'POST',
+            body: formData
+          })
+
+          if (res.ok) {
+            setMessageContent('')
+            setSelectedFile(null)
+            if (fileInputRef.current) {
+              fileInputRef.current.value = ''
+            }
+            await fetchMessages()
+          } else {
+            alert('Ошибка при отправке файла')
+          }
+        } else {
+          // Отправка текстового сообщения
+          const res = await fetch(`/api/deals/${dealId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: messageContent
+            })
+          })
+
+          if (res.ok) {
+            setMessageContent('')
+            await fetchMessages()
+          } else {
+            alert('Ошибка при отправке сообщения')
+          }
         }
       }
     } catch (error) {
-      console.error('Error sending message:', error)
+      console.error('Error sending:', error)
       alert('Ошибка при отправке')
     } finally {
       setSending(false)
@@ -599,36 +660,62 @@ export default function DealDetailPage() {
           )}
         </div>
 
-        {/* Right Panel - Telegram Chat */}
+        {/* Right Panel - Activity Feed */}
         {!isNewDeal && (
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col" style={{ height: '700px' }}>
-          {/* Chat Header */}
+          {/* Activity Header */}
           <div className="p-6 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-100 rounded-lg">
-                <MessageCircle className="w-5 h-5 text-indigo-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">Telegram чат</h2>
-                {deal?.contact?.telegramUsername && (
-                  <p className="text-sm text-gray-500">@{deal?.contact.telegramUsername}</p>
-                )}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <Activity className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Лента активности</h2>
+                  <p className="text-sm text-gray-500">
+                    {deal?.contact?.telegramUsername ? `@${deal?.contact.telegramUsername}` : 'Комментарии и события'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Messages */}
+          {/* Activity Feed */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {!deal?.contact?.telegramId ? (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                <p>У этого контакта нет Telegram ID</p>
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                <p>Пока нет сообщений</p>
-              </div>
-            ) : (
-              messages.map((message) => (
+            {(() => {
+              // Объединяем сообщения и комментарии в единую ленту
+              const activityItems: ActivityItem[] = [
+                ...messages.map(m => ({ ...m, itemType: 'message' as const })),
+                ...comments.map(c => ({ ...c, itemType: 'comment' as const }))
+              ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+              if (activityItems.length === 0) {
+                return (
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    <p>Пока нет активности</p>
+                  </div>
+                )
+              }
+
+              return activityItems.map((item) => {
+                if (item.itemType === 'message') {
+                  const message = item as Message & { itemType: 'message' }
+                  return (
+                <div
+                  key={`msg-${message.id}`}
+                  className={`flex flex-col ${
+                    message.direction === 'OUT' ? 'items-end' : 'items-start'
+                  }`}
+                >
+                  <div
+                    className={`max-w-[70%] rounded-2xl px-4 py-3 ${
+                      message.direction === 'OUT'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-900'
+                    }`}
+                  >
+                    {/* Attachments */}
+                    {message.attachments && message.attachments.length > 0 && (
                 <div
                   key={message.id}
                   className={`flex flex-col ${
@@ -708,74 +795,163 @@ export default function DealDetailPage() {
                     </p>
                   </div>
                 </div>
-              ))
-            )}
+                  )
+                } else {
+                  // Рендер комментария или системного события
+                  const comment = item as Comment & { itemType: 'comment' }
+
+                  if (comment.type === 'SYSTEM_EVENT') {
+                    return (
+                      <div key={`evt-${comment.id}`} className="flex items-center justify-center">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-full text-sm text-gray-600">
+                          <Activity className="w-4 h-4" />
+                          <span>{comment.content}</span>
+                          <span className="text-xs text-gray-400">
+                            {formatDate(comment.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div key={`cmt-${comment.id}`} className="flex flex-col items-start">
+                      <div className="max-w-[70%] bg-amber-50 border-l-4 border-amber-400 rounded-r-2xl px-4 py-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <MessageSquare className="w-4 h-4 text-amber-600" />
+                          {comment.user && (
+                            <span className="text-sm font-medium text-amber-900">{comment.user.name}</span>
+                          )}
+                          <span className="text-xs text-amber-600">Комментарий</span>
+                        </div>
+                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{comment.content}</p>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {formatDate(comment.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                }
+              })
+            })()}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Message Input */}
-          {deal?.contact?.telegramId && (
-            <div className="p-6 border-t border-gray-100">
-              {selectedFile && (
-                <div className="mb-3 p-3 bg-gray-50 rounded-lg flex items-center gap-3">
-                  {getFileIcon(selectedFile.type)}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{selectedFile.name}</p>
-                    <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSelectedFile(null)
-                      if (fileInputRef.current) {
-                        fileInputRef.current.value = ''
-                      }
-                    }}
-                    className="p-1 hover:bg-gray-200 rounded"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+          {/* Input Section */}
+          <div className="p-6 border-t border-gray-100 space-y-3">
+            {/* Mode Toggle */}
+            <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg w-fit">
+              <button
+                onClick={() => setInputMode('comment')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  inputMode === 'comment'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  Комментарий
                 </div>
-              )}
-
-              <div className="flex gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
+              </button>
+              {deal?.contact?.telegramId && (
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={sending}
-                  className="p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition disabled:opacity-50"
+                  onClick={() => setInputMode('message')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                    inputMode === 'message'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
                 >
-                  <Paperclip className="w-5 h-5 text-gray-600" />
+                  <div className="flex items-center gap-2">
+                    <Send className="w-4 h-4" />
+                    Telegram
+                  </div>
                 </button>
-                <input
-                  type="text"
-                  value={messageContent}
-                  onChange={(e) => setMessageContent(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
+              )}
+            </div>
+
+            {selectedFile && inputMode === 'message' && (
+              <div className="p-3 bg-gray-50 rounded-lg flex items-center gap-3">
+                {getFileIcon(selectedFile.type)}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{selectedFile.name}</p>
+                  <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedFile(null)
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = ''
                     }
                   }}
-                  placeholder={selectedFile ? "Добавить подпись к файлу..." : "Написать сообщение..."}
+                  className="p-1 hover:bg-gray-200 rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              {inputMode === 'message' && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                    className="p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition disabled:opacity-50"
+                  >
+                    <Paperclip className="w-5 h-5 text-gray-600" />
+                  </button>
+                </>
+              )}
+              <input
+                type="text"
+                value={messageContent}
+                onChange={(e) => setMessageContent(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSend()
+                    }
+                  }}
+                  placeholder={
+                    inputMode === 'comment'
+                      ? 'Добавить комментарий...'
+                      : selectedFile
+                      ? 'Добавить подпись к файлу...'
+                      : 'Написать сообщение...'
+                  }
                   disabled={sending}
                   className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
                 />
                 <button
-                  onClick={handleSendMessage}
+                  onClick={handleSend}
                   disabled={sending || (!messageContent.trim() && !selectedFile)}
-                  className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`px-6 py-3 rounded-xl font-medium transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    inputMode === 'comment'
+                      ? 'bg-amber-600 text-white hover:bg-amber-700'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
                 >
-                  <Send className="w-5 h-5" />
-                  {sending ? 'Отправка...' : 'Отправить'}
+                  {inputMode === 'comment' ? (
+                    <CheckCircle2 className="w-5 h-5" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
+                  {sending
+                    ? 'Отправка...'
+                    : inputMode === 'comment'
+                    ? 'Добавить'
+                    : 'Отправить'}
                 </button>
               </div>
             </div>
-          )}
         </div>
         )}
       </div>

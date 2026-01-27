@@ -1,97 +1,104 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { sendTelegramMessage } from '@/services/telegram'
 
-// GET /api/deals/:id/comments - Получить комментарии сделки
+// GET /api/deals/[id]/comments - получить все комментарии и события сделки
 export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params
+    const { id: dealId } = params
+
     const comments = await prisma.dealComment.findMany({
-      where: { dealId: id },
+      where: { dealId },
       include: {
         user: {
           select: {
-            name: true
+            id: true,
+            name: true,
+            avatar: true
           }
         }
       },
-      orderBy: {
-        createdAt: 'asc'
-      }
+      orderBy: { createdAt: 'asc' }
     })
 
     return NextResponse.json({ comments })
   } catch (error) {
     console.error('Error fetching comments:', error)
     return NextResponse.json(
-      { error: 'Ошибка при получении комментариев' },
+      { error: 'Failed to fetch comments' },
       { status: 500 }
     )
   }
 }
 
-// POST /api/deals/:id/comments - Добавить комментарий
+// POST /api/deals/[id]/comments - создать комментарий или отправить в Telegram
 export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params
-    const body = await req.json()
-    const { content, type } = body // type: 'COMMENT' | 'TELEGRAM'
+    const { id: dealId } = params
+    const body = await request.json()
+    const { content, type, sendToTelegram, userId } = body
 
-    // Получаем сделку с контактом
-    const deal = await prisma.deal.findUnique({
-      where: { id },
-      include: {
-        contact: true
-      }
-    })
-
-    if (!deal) {
+    // Валидация
+    if (!content || !content.trim()) {
       return NextResponse.json(
-        { error: 'Сделка не найдена' },
-        { status: 404 }
+        { error: 'Content is required' },
+        { status: 400 }
       )
     }
 
-    let sentToTelegram = false
-
-    // Если тип TELEGRAM, отправляем сообщение в Telegram
-    if (type === 'TELEGRAM' && deal.contact?.telegramId) {
-      const telegramSent = await sendTelegramMessage(
-        deal.contact.telegramId,
-        content
-      )
-      sentToTelegram = telegramSent !== null
-    }
-
-    // Сохраняем комментарий
+    // Создаем комментарий
     const comment = await prisma.dealComment.create({
       data: {
         content,
-        type,
-        sentToTelegram,
-        dealId: id,
-        userId: deal.managerId // Берем ID менеджера из сделки, в реальности нужно брать из сессии
+        type: type || 'COMMENT',
+        sentToTelegram: sendToTelegram || false,
+        dealId,
+        userId
       },
       include: {
         user: {
           select: {
-            name: true
+            id: true,
+            name: true,
+            avatar: true
           }
         }
       }
     })
 
-    return NextResponse.json({ comment })
+    // Если нужно отправить в Telegram
+    if (sendToTelegram) {
+      const deal = await prisma.deal.findUnique({
+        where: { id: dealId },
+        include: { contact: true }
+      })
+
+      if (deal?.contact?.telegramId) {
+        try {
+          await fetch(`${request.nextUrl.origin}/api/telegram/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegramId: deal.contact.telegramId,
+              text: content
+            })
+          })
+        } catch (error) {
+          console.error('Error sending to Telegram:', error)
+        }
+      }
+    }
+
+    return NextResponse.json({ comment }, { status: 201 })
   } catch (error) {
     console.error('Error creating comment:', error)
     return NextResponse.json(
-      { error: 'Ошибка при создании комментария' },
+      { error: 'Failed to create comment' },
       { status: 500 }
     )
   }

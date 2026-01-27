@@ -90,17 +90,19 @@ model Deal {
   @@map("deals")
 }
 
-// Комментарии и чат по сделкам
+// Комментарии и активность по сделкам
 model DealComment {
   id              String    @id @default(cuid())
   content         String
-  type            String    // 'COMMENT' | 'TELEGRAM'
+  type            String    // 'COMMENT' | 'SYSTEM_EVENT' | 'TELEGRAM_MESSAGE'
+  eventType       String?   // 'STAGE_CHANGED' | 'CALL_INCOMING' | 'CALL_OUTGOING' | etc
+  metadata        String?   // JSON с дополнительными данными события
   sentToTelegram  Boolean   @default(false)
   createdAt       DateTime  @default(now())
 
   // Связи
   dealId          String
-  deal            Deal      @relation(fields: [dealId], references: [id])
+  deal            Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
   userId          String?
   user            User?     @relation(fields: [userId], references: [id])
 

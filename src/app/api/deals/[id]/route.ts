@@ -56,6 +56,11 @@ export async function PUT(
     const body = await req.json()
     const { title, amount, stage, probability, description, contactId, managerId, order } = body
 
+    // Получаем текущую сделку для сравнения
+    const currentDeal = await prisma.deal.findUnique({
+      where: { id }
+    })
+
     const updateData: any = {}
     if (title !== undefined) updateData.title = title
     if (amount !== undefined) updateData.amount = amount
@@ -92,6 +97,33 @@ export async function PUT(
         }
       }
     })
+
+    // Создаем системное событие при смене статуса
+    if (stage !== undefined && currentDeal && stage !== currentDeal.stage) {
+      const stageNames: Record<string, string> = {
+        'NEW': 'Новые',
+        'CONTACTED': 'Контакт',
+        'MEETING': 'Встреча',
+        'PROPOSAL': 'Предложение',
+        'NEGOTIATION': 'Переговоры',
+        'WON': 'Выиграно',
+        'LOST': 'Проиграно'
+      }
+
+      await prisma.dealComment.create({
+        data: {
+          content: `Статус изменен: ${stageNames[currentDeal.stage] || currentDeal.stage} → ${stageNames[stage] || stage}`,
+          type: 'SYSTEM_EVENT',
+          eventType: 'STAGE_CHANGED',
+          metadata: JSON.stringify({
+            from: currentDeal.stage,
+            to: stage
+          }),
+          dealId: id,
+          userId: managerId || currentDeal.managerId
+        }
+      })
+    }
 
     return NextResponse.json({ deal })
   } catch (error) {
