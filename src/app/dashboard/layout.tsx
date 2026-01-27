@@ -32,14 +32,39 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, isAuthenticated, logout } = useAuthStore()
+  const { user, isAuthenticated, login, logout } = useAuthStore()
   const { sidebarOpen, toggleSidebar } = useUIStore()
 
+  // Проверка авторизации при загрузке страницы
   useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/auth/me')
+        if (res.ok) {
+          const data = await res.json()
+          login(data.user, data.token)
+        } else {
+          logout()
+          router.push('/')
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error)
+        logout()
+        router.push('/')
+      }
+    }
+
+    // Если не авторизован в store, проверяем cookie
     if (!isAuthenticated) {
+      checkAuth()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
       router.push('/')
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, user, router])
 
   const handleLogout = () => {
     logout()

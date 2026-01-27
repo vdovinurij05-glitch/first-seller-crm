@@ -56,6 +56,11 @@ export default function ChatPage() {
     }
 
     fetchContacts()
+
+    // Polling для обновления списка контактов каждые 10 секунд
+    const interval = setInterval(fetchContacts, 10000)
+
+    return () => clearInterval(interval)
   }, [])
 
   // Загрузка сообщений при выборе контакта
@@ -74,6 +79,32 @@ export default function ChatPage() {
 
     fetchMessages()
   }, [activeContactId, setMessages])
+
+  // Polling для новых сообщений (каждые 3 секунды)
+  useEffect(() => {
+    if (!activeContactId) return
+
+    const pollMessages = async () => {
+      try {
+        const res = await fetch(`/api/messages?contactId=${activeContactId}`)
+        const data = await res.json()
+        const newMessages = data.messages || []
+
+        // Обновляем только если количество сообщений изменилось
+        if (newMessages.length !== activeMessages.length) {
+          setMessages(activeContactId, newMessages)
+        }
+      } catch (error) {
+        console.error('Error polling messages:', error)
+      }
+    }
+
+    // Запускаем polling каждые 3 секунды
+    const interval = setInterval(pollMessages, 3000)
+
+    // Очищаем interval при размонтировании или смене контакта
+    return () => clearInterval(interval)
+  }, [activeContactId, activeMessages.length, setMessages])
 
   // Скролл к последнему сообщению
   useEffect(() => {
