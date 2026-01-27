@@ -147,9 +147,22 @@ export default function PipelinePage() {
     if (!over || active.id === over.id) return
 
     const dealId = active.id as string
-    const newStage = over.id as string
 
-    console.log('🎯 Drag ended:', { dealId, newStage })
+    // Определяем новый stage
+    // over.id может быть либо stage slug (если дропнули на колонку), либо deal id (если дропнули на сделку)
+    let newStage: string
+
+    // Проверяем, является ли over.id ID сделки
+    const droppedOnDeal = deals.find(d => d.id === over.id)
+    if (droppedOnDeal) {
+      // Дропнули на сделку - берем её stage
+      newStage = droppedOnDeal.stage
+      console.log('🎯 Drag ended: dropped on deal, using its stage:', { dealId, newStage, droppedOnDealId: over.id })
+    } else {
+      // Дропнули на колонку - используем её ID как stage
+      newStage = over.id as string
+      console.log('🎯 Drag ended: dropped on column:', { dealId, newStage })
+    }
 
     // Оптимистичное обновление UI
     setDeals((prevDeals) =>
