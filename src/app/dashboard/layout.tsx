@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore, useUIStore } from '@/lib/store'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   LayoutDashboard,
   MessageSquare,
@@ -34,10 +34,17 @@ export default function DashboardLayout({
   const router = useRouter()
   const { user, isAuthenticated, login, logout } = useAuthStore()
   const { sidebarOpen, toggleSidebar } = useUIStore()
+  const [checkingAuth, setCheckingAuth] = useState(true)
 
   // Проверка авторизации при загрузке страницы
   useEffect(() => {
     const checkAuth = async () => {
+      // Если уже авторизован в store, не проверяем
+      if (isAuthenticated) {
+        setCheckingAuth(false)
+        return
+      }
+
       try {
         const res = await fetch('/api/auth/me')
         if (res.ok) {
@@ -51,26 +58,32 @@ export default function DashboardLayout({
         console.error('Auth check failed:', error)
         logout()
         router.push('/')
+      } finally {
+        setCheckingAuth(false)
       }
     }
 
-    // Если не авторизован в store, проверяем cookie
-    if (!isAuthenticated) {
-      checkAuth()
-    }
+    checkAuth()
   }, [])
-
-  useEffect(() => {
-    if (!isAuthenticated && !user) {
-      router.push('/')
-    }
-  }, [isAuthenticated, user, router])
 
   const handleLogout = () => {
     logout()
     router.push('/')
   }
 
+  // Показываем загрузку пока проверяем авторизацию
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-gray-600">Загрузка...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Если не авторизован после проверки, показываем null
   if (!isAuthenticated) {
     return null
   }
