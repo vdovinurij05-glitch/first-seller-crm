@@ -91,7 +91,7 @@ async function createContactAndDeal(ctx: MessageContext) {
 
     if (!contact) {
       // Получаем аватарку пользователя
-      const avatar = await getUserAvatar(ctx.from.id)
+      const avatar = await getUserAvatar(ctx.from!.id)
 
       // Создаем новый контакт
       contact = await prisma.contact.create({
