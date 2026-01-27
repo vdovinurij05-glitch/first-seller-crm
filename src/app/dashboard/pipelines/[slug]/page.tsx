@@ -149,6 +149,8 @@ export default function PipelinePage() {
     const dealId = active.id as string
     const newStage = over.id as string
 
+    console.log('🎯 Drag ended:', { dealId, newStage })
+
     // Оптимистичное обновление UI
     setDeals((prevDeals) =>
       prevDeals.map((deal) =>
@@ -157,6 +159,7 @@ export default function PipelinePage() {
     )
 
     try {
+      console.log('📡 Sending PATCH request...')
       const res = await fetch(`/api/deals/${dealId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -164,13 +167,20 @@ export default function PipelinePage() {
       })
 
       if (!res.ok) {
+        const error = await res.json()
+        console.error('❌ API Error:', error)
         throw new Error('Failed to update deal')
       }
 
-      fetchDeals()
+      const result = await res.json()
+      console.log('✅ API Success:', result)
+
+      // Обновляем список после успешного сохранения
+      await fetchDeals()
     } catch (error) {
-      console.error('Error updating deal stage:', error)
-      fetchDeals()
+      console.error('❌ Error updating deal stage:', error)
+      // При ошибке откатываем изменения
+      await fetchDeals()
     }
   }
 

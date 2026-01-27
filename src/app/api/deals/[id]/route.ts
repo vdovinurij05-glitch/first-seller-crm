@@ -46,6 +46,14 @@ export async function GET(
   }
 }
 
+// PATCH /api/deals/:id - Частичное обновление сделки
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  return PUT(req, { params })
+}
+
 // PUT /api/deals/:id - Обновить сделку
 export async function PUT(
   req: NextRequest,
