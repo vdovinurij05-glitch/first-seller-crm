@@ -716,21 +716,6 @@ export default function DealDetailPage() {
                   >
                     {/* Attachments */}
                     {message.attachments && message.attachments.length > 0 && (
-                <div
-                  key={message.id}
-                  className={`flex flex-col ${
-                    message.direction === 'OUT' ? 'items-end' : 'items-start'
-                  }`}
-                >
-                  <div
-                    className={`max-w-[70%] rounded-2xl px-4 py-3 ${
-                      message.direction === 'OUT'
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-gray-100 text-gray-900'
-                    }`}
-                  >
-                    {/* Attachments */}
-                    {message.attachments && message.attachments.length > 0 && (
                       <div className="mb-2 space-y-2">
                         {message.attachments.map((attachment) => (
                           <div key={attachment.id}>

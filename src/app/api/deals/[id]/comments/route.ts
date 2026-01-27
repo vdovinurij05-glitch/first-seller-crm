@@ -4,10 +4,10 @@ import prisma from '@/lib/prisma'
 // GET /api/deals/[id]/comments - получить все комментарии и события сделки
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: dealId } = params
+    const { id: dealId } = await params
 
     const comments = await prisma.dealComment.findMany({
       where: { dealId },
@@ -36,10 +36,10 @@ export async function GET(
 // POST /api/deals/[id]/comments - создать комментарий или отправить в Telegram
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: dealId } = params
+    const { id: dealId } = await params
     const body = await request.json()
     const { content, type, sendToTelegram, userId } = body
 
