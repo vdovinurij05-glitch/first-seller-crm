@@ -80,6 +80,14 @@ export default function ChatPage() {
     fetchMessages()
   }, [activeContactId, setMessages])
 
+  // Используем ref для хранения текущих сообщений без триггера re-render
+  const messagesRef = useRef(activeMessages)
+
+  // Обновляем ref при изменении сообщений
+  useEffect(() => {
+    messagesRef.current = activeMessages
+  }, [activeMessages])
+
   // Polling для новых сообщений (каждые 3 секунды)
   useEffect(() => {
     if (!activeContactId) return
@@ -89,12 +97,13 @@ export default function ChatPage() {
         const res = await fetch(`/api/messages?contactId=${activeContactId}`)
         const data = await res.json()
         const newMessages = data.messages || []
+        const currentMessages = messagesRef.current
 
         // Проверяем нужно ли обновлять
         const shouldUpdate =
-          newMessages.length !== activeMessages.length ||
-          (newMessages.length > 0 && activeMessages.length > 0 &&
-           newMessages[newMessages.length - 1]?.id !== activeMessages[activeMessages.length - 1]?.id)
+          newMessages.length !== currentMessages.length ||
+          (newMessages.length > 0 && currentMessages.length > 0 &&
+           newMessages[newMessages.length - 1]?.id !== currentMessages[currentMessages.length - 1]?.id)
 
         if (shouldUpdate) {
           setMessages(activeContactId, newMessages)
@@ -104,12 +113,15 @@ export default function ChatPage() {
       }
     }
 
+    // Запускаем первый запрос сразу
+    pollMessages()
+
     // Запускаем polling каждые 3 секунды
     const interval = setInterval(pollMessages, 3000)
 
     // Очищаем interval при размонтировании или смене контакта
     return () => clearInterval(interval)
-  }, [activeContactId, activeMessages, setMessages])
+  }, [activeContactId, setMessages])
 
   // Скролл к последнему сообщению
   useEffect(() => {
