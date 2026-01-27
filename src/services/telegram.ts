@@ -135,7 +135,7 @@ bot.on('message:text', async (ctx: MessageContext) => {
   const text = ctx.message.text
   const messageId = ctx.message.message_id
 
-  if (!telegramId) return
+  if (!telegramId || !text) return
 
   try {
     // Создаем контакт и сделку если нужно
