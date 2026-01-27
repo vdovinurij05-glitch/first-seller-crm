@@ -37,10 +37,10 @@ async function main() {
   if (existingUsers === 0) {
     console.log('Создаем тестовых пользователей...')
 
-    const hashedPassword = await bcrypt.hash('rrjylhfnrf123', 10)
+    const hashedPassword = await bcrypt.hash('rjylhfnrf123', 10)
 
     const user = {
-      email: 'admin',
+      email: 'savatop@yandex.ru',
       name: 'Администратор',
       password: hashedPassword,
       role: 'ADMIN'
@@ -51,7 +51,7 @@ async function main() {
     })
 
     console.log('✓ Тестовый пользователь создан')
-    console.log('  Email: admin / Пароль: rrjylhfnrf123')
+    console.log('  Email: savatop@yandex.ru / Пароль: rjylhfnrf123')
   } else {
     console.log('Пользователи уже существуют, пропускаем...')
   }
