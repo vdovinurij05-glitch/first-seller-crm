@@ -240,7 +240,7 @@ export default function PipelinePage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-6 overflow-x-auto pb-4">
+        <div className="flex gap-6 overflow-x-auto pb-4 pt-8">
           {pipeline.stages.map((stage) => {
             const stageDeals = getDealsByStage(stage.slug)
             const totalAmount = stageDeals.reduce((sum, deal) => sum + deal.amount, 0)
