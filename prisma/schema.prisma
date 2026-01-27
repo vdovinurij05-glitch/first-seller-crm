@@ -86,6 +86,7 @@ model Deal {
   managerId   String?
   manager     User?       @relation(fields: [managerId], references: [id])
   comments    DealComment[]
+  calls       Call[]
 
   @@map("deals")
 }
@@ -169,6 +170,8 @@ model Call {
   // Связи
   contactId       String?
   contact         Contact?      @relation(fields: [contactId], references: [id])
+  dealId          String?
+  deal            Deal?         @relation(fields: [dealId], references: [id])
   managerId       String?
   manager         User?         @relation(fields: [managerId], references: [id])
   transcription   CallTranscription?

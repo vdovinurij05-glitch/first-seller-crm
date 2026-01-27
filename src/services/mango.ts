@@ -247,6 +247,20 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
       where: { phone: clientPhone }
     })
 
+    // Находим активную сделку для существующего контакта
+    let activeDeal = null
+    if (contact) {
+      activeDeal = await prisma.deal.findFirst({
+        where: {
+          contactId: contact.id,
+          closedAt: null
+        },
+        orderBy: {
+          updatedAt: 'desc'
+        }
+      })
+    }
+
     // Находим или создаем запись о звонке
     let call = await prisma.call.findUnique({
       where: { mangoCallId: call_id }
@@ -257,10 +271,15 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
       call = await prisma.call.create({
         data: {
           mangoCallId: call_id,
+          externalId: event.entry_id,
           direction: isIncoming ? 'IN' : 'OUT',
           phone: clientPhone,
+          fromNumber: from.number,
+          toNumber: to.number,
           status: 'INITIATED',
           contactId: contact?.id,
+          dealId: activeDeal?.id, // Связываем звонок со сделкой
+          startTime: new Date(timestamp * 1000),
           createdAt: new Date(timestamp * 1000)
         }
       })
@@ -288,10 +307,13 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
           }
         })
 
-        // Обновляем звонок, связывая с новым контактом
+        // Обновляем звонок, связывая с новым контактом и сделкой
         await prisma.call.update({
           where: { id: call.id },
-          data: { contactId: newContact.id }
+          data: {
+            contactId: newContact.id,
+            dealId: newDeal.id
+          }
         })
 
         // Синхронизируем историю звонков из Mango
@@ -358,10 +380,12 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
                 eventType: isIncoming ? 'CALL_INCOMING' : 'CALL_OUTGOING',
                 metadata: JSON.stringify({
                   callId: call_id,
+                  callRecordId: call.id, // ID записи в БД для получения аудио и транскрибации
                   entryId: event.entry_id,
                   duration,
                   disconnectReason: disconnect_reason,
-                  status
+                  status,
+                  recordingUrl: call.recordingUrl || null // Ссылка на аудиозапись если есть
                 }),
                 dealId: activeDeal.id
               }
@@ -395,13 +419,95 @@ export async function handleMangoRecording(event: MangoRecordingEvent): Promise<
     const recordingUrl = await getCallRecording(recording_id)
 
     if (recordingUrl) {
-      await prisma.call.update({
+      // Обновляем звонок
+      const call = await prisma.call.update({
         where: { mangoCallId: call_id },
         data: { recordingUrl }
       })
+
+      console.log(`✅ Recording URL saved for call ${call_id}`)
+
+      // Если звонок связан со сделкой, обновляем системное событие
+      if (call.dealId) {
+        // Находим системное событие о звонке в сделке
+        const dealComment = await prisma.dealComment.findFirst({
+          where: {
+            dealId: call.dealId,
+            type: 'SYSTEM_EVENT',
+            metadata: {
+              contains: call_id // Ищем по call_id в metadata
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        })
+
+        if (dealComment) {
+          // Обновляем metadata с URL записи
+          const metadata = JSON.parse(dealComment.metadata || '{}')
+          metadata.recordingUrl = recordingUrl
+          metadata.recordingId = recording_id
+
+          await prisma.dealComment.update({
+            where: { id: dealComment.id },
+            data: {
+              metadata: JSON.stringify(metadata)
+            }
+          })
+
+          console.log(`✅ Updated deal comment with recording URL`)
+
+          // Запускаем транскрибацию в фоне (если настроено)
+          setTimeout(async () => {
+            await transcribeCallRecording(call.id, recordingUrl)
+          }, 2000)
+        }
+      }
     }
   } catch (error) {
     console.error('Error handling Mango recording:', error)
+  }
+}
+
+// Транскрибация звонка (заглушка для будущей интеграции)
+export async function transcribeCallRecording(
+  callId: string,
+  recordingUrl: string
+): Promise<void> {
+  try {
+    console.log(`🎙️ Transcription requested for call ${callId}`)
+    console.log(`Recording URL: ${recordingUrl}`)
+
+    // TODO: Здесь будет интеграция с OpenAI Whisper API или другим сервисом транскрибации
+    // 1. Скачать аудиофайл по recordingUrl
+    // 2. Отправить на транскрибацию (OpenAI Whisper, Google Speech-to-Text, и т.д.)
+    // 3. Получить текст транскрибации
+    // 4. Сохранить в CallTranscription
+    // 5. Опционально: сделать анализ sentiment, извлечь ключевые слова
+    // 6. Обновить системное событие в сделке с текстом транскрибации
+
+    // Пример будущей реализации:
+    // const audioBuffer = await downloadAudio(recordingUrl)
+    // const transcription = await openai.audio.transcriptions.create({
+    //   file: audioBuffer,
+    //   model: 'whisper-1',
+    //   language: 'ru'
+    // })
+    //
+    // await prisma.callTranscription.create({
+    //   data: {
+    //     callId,
+    //     text: transcription.text,
+    //     summary: await generateSummary(transcription.text),
+    //     sentiment: await analyzeSentiment(transcription.text),
+    //     keywords: JSON.stringify(await extractKeywords(transcription.text))
+    //   }
+    // })
+
+    console.log(`⏸️ Transcription skipped - not implemented yet`)
+  } catch (error) {
+    console.error('Error transcribing call recording:', error)
   }
 }
 
