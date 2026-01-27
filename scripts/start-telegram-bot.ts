@@ -404,6 +404,11 @@ async function startPolling() {
     )
 
     console.log('✅ Webhook удален')
+    console.log('⏳ Ожидание 30 секунд для обработки удаления webhook...')
+
+    // Ждем 30 секунд чтобы Telegram обработал удаление webhook
+    await new Promise(resolve => setTimeout(resolve, 30000))
+
     console.log('⏳ Запуск бота...')
 
     // Запускаем бота
