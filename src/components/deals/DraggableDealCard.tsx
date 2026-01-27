@@ -32,6 +32,7 @@ export default function DraggableDealCard({ deal, onClick }: DraggableDealCardPr
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     transition,
     isDragging
@@ -51,9 +52,10 @@ export default function DraggableDealCard({ deal, onClick }: DraggableDealCardPr
     >
       {/* Drag Handle - видимый и draggable */}
       <div
+        ref={setActivatorNodeRef}
         {...attributes}
         {...listeners}
-        className="flex-shrink-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-gray-100 rounded-lg transition-colors touch-none"
+        className="flex-shrink-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-gray-100 rounded-lg transition-colors"
       >
         <GripVertical className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
       </div>
