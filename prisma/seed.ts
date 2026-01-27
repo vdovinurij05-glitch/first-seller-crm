@@ -1,8 +1,10 @@
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
 async function main() {
+  // Создаем статусы
   const existingStages = await prisma.stage.count()
 
   if (existingStages === 0) {
@@ -27,6 +29,31 @@ async function main() {
     console.log('✓ Дефолтные статусы добавлены')
   } else {
     console.log('Статусы уже существуют, пропускаем...')
+  }
+
+  // Создаем пользователей
+  const existingUsers = await prisma.user.count()
+
+  if (existingUsers === 0) {
+    console.log('Создаем тестовых пользователей...')
+
+    const hashedPassword = await bcrypt.hash('rrjylhfnrf123', 10)
+
+    const user = {
+      email: 'admin',
+      name: 'Администратор',
+      password: hashedPassword,
+      role: 'ADMIN'
+    }
+
+    await prisma.user.create({
+      data: user
+    })
+
+    console.log('✓ Тестовый пользователь создан')
+    console.log('  Email: admin / Пароль: rrjylhfnrf123')
+  } else {
+    console.log('Пользователи уже существуют, пропускаем...')
   }
 }
 
