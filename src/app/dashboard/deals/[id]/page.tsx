@@ -248,7 +248,7 @@ export default function DealDetailPage() {
 
   const handleSendMessage = async () => {
     if (!messageContent.trim() && !selectedFile) return
-    if (!deal?.contact?.telegramId) {
+    if (!deal || !deal.contact?.telegramId) {
       alert('У этого контакта нет Telegram ID')
       return
     }
@@ -546,53 +546,55 @@ export default function DealDetailPage() {
             <div className="space-y-6">
               <div>
                 <p className="text-sm text-gray-500 mb-2">Сумма сделки</p>
-                <p className="text-3xl font-bold text-green-600">{formatCurrency(deal.amount)}</p>
+                <p className="text-3xl font-bold text-green-600">{formatCurrency(deal?.amount || 0)}</p>
               </div>
 
               <div>
                 <p className="text-sm text-gray-500 mb-1">Этап</p>
                 <p className="font-medium text-gray-900">
-                  {stages.find(s => s.id === deal.stage)?.name}
+                  {stages.find(s => s.id === deal?.stage)?.name}
                 </p>
               </div>
 
-              {deal.contact && (
+              {deal?.contact && (
                 <div>
                   <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
                     <User className="w-4 h-4" />
                     <span>Контакт</span>
                   </div>
-                  <p className="font-medium text-gray-900">{deal.contact.name}</p>
-                  {deal.contact.phone && (
-                    <p className="text-sm text-gray-600 mt-1">{deal.contact.phone}</p>
+                  <p className="font-medium text-gray-900">{deal?.contact.name}</p>
+                  {deal?.contact.phone && (
+                    <p className="text-sm text-gray-600 mt-1">{deal?.contact.phone}</p>
                   )}
-                  {deal.contact.telegramUsername && (
-                    <p className="text-sm text-indigo-600 mt-1">@{deal.contact.telegramUsername}</p>
+                  {deal?.contact.telegramUsername && (
+                    <p className="text-sm text-indigo-600 mt-1">@{deal?.contact.telegramUsername}</p>
                   )}
                 </div>
               )}
 
-              {deal.manager && (
+              {deal?.manager && (
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Менеджер</p>
-                  <p className="font-medium text-gray-900">{deal.manager.name}</p>
+                  <p className="font-medium text-gray-900">{deal?.manager.name}</p>
                 </div>
               )}
 
-              {deal.description && (
+              {deal?.description && (
                 <div>
                   <p className="text-sm text-gray-500 mb-2">Описание</p>
-                  <p className="text-gray-700 text-sm">{deal.description}</p>
+                  <p className="text-gray-700 text-sm">{deal?.description}</p>
                 </div>
               )}
 
+              {deal?.createdAt && (
               <div className="pt-4 border-t border-gray-100">
                 <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
                   <Calendar className="w-4 h-4" />
                   <span>Создано</span>
                 </div>
-                <p className="text-sm text-gray-900">{formatDate(deal.createdAt)}</p>
+                <p className="text-sm text-gray-900">{formatDate(deal?.createdAt)}</p>
               </div>
+              )}
             </div>
           )}
         </div>
@@ -608,8 +610,8 @@ export default function DealDetailPage() {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-gray-900">Telegram чат</h2>
-                {deal.contact?.telegramUsername && (
-                  <p className="text-sm text-gray-500">@{deal.contact.telegramUsername}</p>
+                {deal?.contact?.telegramUsername && (
+                  <p className="text-sm text-gray-500">@{deal?.contact.telegramUsername}</p>
                 )}
               </div>
             </div>
@@ -617,7 +619,7 @@ export default function DealDetailPage() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {!deal.contact?.telegramId ? (
+            {!deal?.contact?.telegramId ? (
               <div className="flex items-center justify-center h-full text-gray-500">
                 <p>У этого контакта нет Telegram ID</p>
               </div>
@@ -712,7 +714,7 @@ export default function DealDetailPage() {
           </div>
 
           {/* Message Input */}
-          {deal.contact?.telegramId && (
+          {deal?.contact?.telegramId && (
             <div className="p-6 border-t border-gray-100">
               {selectedFile && (
                 <div className="mb-3 p-3 bg-gray-50 rounded-lg flex items-center gap-3">
