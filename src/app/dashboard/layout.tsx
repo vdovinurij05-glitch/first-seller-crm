@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore, useUIStore } from '@/lib/store'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   LayoutDashboard,
   MessageSquare,
@@ -15,6 +15,16 @@ import {
   Menu,
   X
 } from 'lucide-react'
+import DealNotification from '@/components/DealNotification'
+
+interface NotificationData {
+  id: string
+  content: string
+  dealId: string
+  dealTitle: string
+  contactName: string
+  contactUsername?: string
+}
 
 const navigation = [
   { name: 'Дашборд', href: '/dashboard', icon: LayoutDashboard },
@@ -35,6 +45,9 @@ export default function DashboardLayout({
   const { user, isAuthenticated, login, logout } = useAuthStore()
   const { sidebarOpen, toggleSidebar } = useUIStore()
   const [checkingAuth, setCheckingAuth] = useState(true)
+  const [notifications, setNotifications] = useState<NotificationData[]>([])
+  const lastCheckRef = useRef<number>(Date.now())
+  const shownMessagesRef = useRef<Set<string>>(new Set())
 
   // Проверка авторизации при загрузке страницы
   useEffect(() => {
@@ -66,9 +79,63 @@ export default function DashboardLayout({
     checkAuth()
   }, [])
 
+  // Polling для новых сообщений в сделках
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const checkNewMessages = async () => {
+      try {
+        const res = await fetch(`/api/messages/recent?since=${lastCheckRef.current}`)
+        if (res.ok) {
+          const data = await res.json()
+          const messages = data.messages || []
+
+          // Фильтруем сообщения, которые мы еще не показали
+          const newMessages = messages.filter((msg: any) => !shownMessagesRef.current.has(msg.id))
+
+          if (newMessages.length > 0) {
+            // Добавляем новые уведомления
+            const newNotifications: NotificationData[] = newMessages.map((msg: any) => ({
+              id: msg.id,
+              content: msg.content,
+              dealId: msg.dealId,
+              dealTitle: msg.deal?.title || 'Сделка',
+              contactName: msg.contact?.name || 'Контакт',
+              contactUsername: msg.contact?.telegramUsername
+            }))
+
+            setNotifications((prev) => [...prev, ...newNotifications])
+
+            // Добавляем в список показанных
+            newMessages.forEach((msg: any) => {
+              shownMessagesRef.current.add(msg.id)
+            })
+          }
+
+          // Обновляем время последней проверки
+          lastCheckRef.current = Date.now()
+        }
+      } catch (error) {
+        console.error('Error checking new messages:', error)
+      }
+    }
+
+    // Проверяем сразу
+    checkNewMessages()
+
+    // Затем каждые 5 секунд
+    const interval = setInterval(checkNewMessages, 5000)
+
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
+
   const handleLogout = () => {
     logout()
     router.push('/')
+  }
+
+  const handleCloseNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
   }
 
   // Показываем загрузку пока проверяем авторизацию
@@ -166,6 +233,24 @@ export default function DashboardLayout({
           onClick={toggleSidebar}
         />
       )}
+
+      {/* Notifications */}
+      <div className="fixed left-0 bottom-0 z-50 space-y-3 p-6">
+        {notifications.map((notification, index) => (
+          <div
+            key={notification.id}
+            style={{
+              transform: `translateY(-${index * 10}px)`,
+              zIndex: 50 + index
+            }}
+          >
+            <DealNotification
+              notification={notification}
+              onClose={() => handleCloseNotification(notification.id)}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
