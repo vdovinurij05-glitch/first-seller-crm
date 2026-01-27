@@ -58,11 +58,9 @@ export default function DraggableDealCard({ deal, onClick }: DraggableDealCardPr
     }, 0)
   }
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = () => {
     // Не вызываем onClick если был драг
     if (wasDragged.current) {
-      e.preventDefault()
-      e.stopPropagation()
       return
     }
     onClick?.()
