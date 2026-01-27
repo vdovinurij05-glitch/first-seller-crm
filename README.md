@@ -144,7 +144,7 @@ SQLite база находится в `prisma/dev.db`
 
 1. Склонируйте репозиторий:
 ```bash
-git clone https://github.com/your-username/first-seller-crm.git
+git clone https://github.com/vdovinurij05-glitch/first-seller-crm.git
 cd first-seller-crm
 ```
 
@@ -203,7 +203,7 @@ sudo chown -R $USER:$USER /var/www/first-seller-crm
 
 # Клонирование
 cd /var/www/first-seller-crm
-git clone https://github.com/your-username/first-seller-crm.git .
+git clone https://github.com/vdovinurij05-glitch/first-seller-crm.git .
 ```
 
 #### Шаг 3: Настройка приложения
