@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Менеджеры отдела продаж
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String
+  @db.VarChar(20) role          String      @default(MANAGER)
+  avatar        String?
+  isOnline      Boolean   @default(false)
+  lastSeenAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Связи
+  contacts      Contact[]
+  deals         Deal[]
+  messages      Message[]
+  calls         Call[]
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+}
+
+// Контакты/Лиды
+model Contact {
+  id              String    @id @default(cuid())
+  name            String
+  phone           String?
+  email           String?
+  telegramId      String?   @unique // ID пользователя в Telegram
+  telegramUsername String?
+  source          String?   // Источник: telegram, phone, website
+  @db.VarChar(20) status          String @default(NEW)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Связи
+  managerId       String?
+  manager         User?     @relation(fields: [managerId], references: [id])
+  deals           Deal[]
+  messages        Message[]
+  calls           Call[]
+
+  @@map("contacts")
+}
+
+enum ContactStatus {
+  NEW
+  IN_PROGRESS
+  QUALIFIED
+  UNQUALIFIED
+  CONVERTED
+}
+
+// Сделки
+model Deal {
+  id          String      @id @default(cuid())
+  title       String
+  amount      Float?
+  @db.VarChar(20) stage       String   @default(NEW)
+  probability Int?        @default(0) // 0-100%
+  notes       String?
+  closedAt    DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Связи
+  contactId   String
+  contact     Contact     @relation(fields: [contactId], references: [id])
+  managerId   String
+  manager     User        @relation(fields: [managerId], references: [id])
+
+  @@map("deals")
+}
+
+enum DealStage {
+  NEW
+  CONTACTED
+  MEETING
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+// Сообщения (Telegram и чат)
+model Message {
+  id              String        @id @default(cuid())
+  content         String
+  @db.VarChar(20) type            String   @default(TEXT)
+  @db.VarChar(10) direction       String     // IN - входящее, OUT - исходящее
+  telegramMsgId   Int?          // ID сообщения в Telegram
+  isRead          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+
+  // Связи
+  contactId       String
+  contact         Contact       @relation(fields: [contactId], references: [id])
+  managerId       String?
+  manager         User?         @relation(fields: [managerId], references: [id])
+
+  // Файлы/медиа
+  attachments     Attachment[]
+
+  @@map("messages")
+}
+
+enum MessageType {
+  TEXT
+  PHOTO
+  DOCUMENT
+  VOICE
+  VIDEO
+}
+
+enum Direction {
+  IN
+  OUT
+}
+
+// Вложения к сообщениям
+model Attachment {
+  id          String    @id @default(cuid())
+  filename    String
+  url         String
+  mimeType    String?
+  size        Int?
+  createdAt   DateTime  @default(now())
+
+  messageId   String
+  message     Message   @relation(fields: [messageId], references: [id])
+
+  @@map("attachments")
+}
+
+// Звонки (Mango Office)
+model Call {
+  id              String        @id @default(cuid())
+  mangoCallId     String        @unique // ID звонка в Mango
+  @db.VarChar(10) direction       String
+  phone           String        // Номер телефона
+  duration        Int?          // Длительность в секундах
+  @db.VarChar(20) status          String    @default(INITIATED)
+  recordingUrl    String?       // URL аудиозаписи
+  createdAt       DateTime      @default(now())
+  answeredAt      DateTime?
+  endedAt         DateTime?
+
+  // Связи
+  contactId       String?
+  contact         Contact?      @relation(fields: [contactId], references: [id])
+  managerId       String?
+  manager         User?         @relation(fields: [managerId], references: [id])
+  transcription   CallTranscription?
+
+  @@map("calls")
+}
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  ANSWERED
+  COMPLETED
+  MISSED
+  BUSY
+  FAILED
+}
+
+// Транскрибация звонков
+model CallTranscription {
+  id          String    @id @default(cuid())
+  text        String    // Полный текст транскрибации
+  summary     String?   // Краткое резюме
+  sentiment   String?   // Тональность: positive, negative, neutral
+  keywords    String    // Ключевые слова (JSON string)
+  createdAt   DateTime  @default(now())
+
+  callId      String    @unique
+  call        Call      @relation(fields: [callId], references: [id])
+
+  @@map("call_transcriptions")
+}
+
+// Настройки интеграций
+model Integration {
+  id          String    @id @default(cuid())
+  type        String    // telegram, mango
+  config      String      // Конфигурация (зашифрованная)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("integrations")
+}

@@ -1,0 +1,133 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { useAuthStore, useUIStore } from '@/lib/store'
+import { useEffect } from 'react'
+import {
+  LayoutDashboard,
+  MessageSquare,
+  Users,
+  Phone,
+  Briefcase,
+  Settings,
+  LogOut,
+  Menu,
+  X
+} from 'lucide-react'
+
+const navigation = [
+  { name: 'Дашборд', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Чат', href: '/dashboard/chat', icon: MessageSquare },
+  { name: 'Контакты', href: '/dashboard/contacts', icon: Users },
+  { name: 'Звонки', href: '/dashboard/calls', icon: Phone },
+  { name: 'Сделки', href: '/dashboard/deals', icon: Briefcase },
+  { name: 'Настройки', href: '/dashboard/settings', icon: Settings },
+]
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const { user, isAuthenticated, logout } = useAuthStore()
+  const { sidebarOpen, toggleSidebar } = useUIStore()
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/')
+    }
+  }, [isAuthenticated, router])
+
+  const handleLogout = () => {
+    logout()
+    router.push('/')
+  }
+
+  if (!isAuthenticated) {
+    return null
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Mobile sidebar toggle */}
+      <button
+        onClick={toggleSidebar}
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-md"
+      >
+        {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+      </button>
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {/* Logo */}
+        <div className="h-16 flex items-center px-6 border-b border-gray-200">
+          <h1 className="text-xl font-bold text-indigo-600">First Seller</h1>
+        </div>
+
+        {/* Navigation */}
+        <nav className="p-4 space-y-1">
+          {navigation.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition ${
+                  isActive
+                    ? 'bg-indigo-50 text-indigo-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                <span className="font-medium">{item.name}</span>
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* User */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+              <span className="text-indigo-600 font-medium">
+                {user?.name?.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {user?.name}
+              </p>
+              <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 text-gray-400 hover:text-red-500 transition"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className={`transition-all duration-200 ${sidebarOpen ? 'lg:ml-64' : ''} lg:ml-64`}>
+        <div className="p-6">{children}</div>
+      </main>
+
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-30"
+          onClick={toggleSidebar}
+        />
+      )}
+    </div>
+  )
+}

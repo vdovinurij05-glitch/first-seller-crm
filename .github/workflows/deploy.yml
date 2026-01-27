@@ -1,0 +1,67 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            cd /var/www/first-seller-crm || exit 1
+
+            echo "🔄 Pulling latest code..."
+            git pull origin main
+
+            echo "📦 Installing dependencies..."
+            npm ci
+
+            echo "🗄️ Running database migrations..."
+            npx prisma generate
+            npx prisma migrate deploy
+
+            echo "🌱 Seeding database (if needed)..."
+            npm run db:seed || true
+
+            echo "🏗️ Building application..."
+            npm run build
+
+            echo "🔄 Restarting application..."
+            pm2 restart first-seller-crm || pm2 start npm --name "first-seller-crm" -- start
+
+            echo "✅ Deployment completed!"
+            pm2 status
+
+      - name: Setup Telegram Webhook
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            cd /var/www/first-seller-crm
+            npm run telegram:setup || echo "⚠️ Telegram webhook setup skipped"
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Deployment successful!"
+          else
+            echo "❌ Deployment failed!"
+          fi

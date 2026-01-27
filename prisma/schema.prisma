@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Менеджеры отдела продаж
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String
+  role          String    @default("MANAGER")
+  avatar        String?
+  isOnline      Boolean   @default(false)
+  lastSeenAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Связи
+  contacts      Contact[]
+  deals         Deal[]
+  messages      Message[]
+  calls         Call[]
+  dealComments  DealComment[]
+
+  @@map("users")
+}
+
+// Контакты/Лиды
+model Contact {
+  id              String    @id @default(cuid())
+  name            String
+  phone           String?
+  email           String?
+  telegramId      String?   @unique
+  telegramUsername String?
+  source          String?
+  status          String    @default("NEW")
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Связи
+  managerId       String?
+  manager         User?     @relation(fields: [managerId], references: [id])
+  deals           Deal[]
+  messages        Message[]
+  calls           Call[]
+
+  @@map("contacts")
+}
+
+// Этапы сделок
+model Stage {
+  id        String   @id @default(cuid())
+  name      String
+  color     String
+  order     Int      @default(0)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("stages")
+}
+
+// Сделки
+model Deal {
+  id          String      @id @default(cuid())
+  title       String
+  amount      Float       @default(0)
+  stage       String      @default("NEW")
+  probability Int         @default(50)
+  description String?
+  order       Int         @default(0)
+  closedAt    DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Связи
+  contactId   String?
+  contact     Contact?    @relation(fields: [contactId], references: [id])
+  managerId   String?
+  manager     User?       @relation(fields: [managerId], references: [id])
+  comments    DealComment[]
+
+  @@map("deals")
+}
+
+// Комментарии и чат по сделкам
+model DealComment {
+  id              String    @id @default(cuid())
+  content         String
+  type            String    // 'COMMENT' | 'TELEGRAM'
+  sentToTelegram  Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  // Связи
+  dealId          String
+  deal            Deal      @relation(fields: [dealId], references: [id])
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id])
+
+  @@map("deal_comments")
+}
+
+// Сообщения (Telegram и чат)
+model Message {
+  id              String        @id @default(cuid())
+  content         String
+  type            String        @default("TEXT")
+  direction       String
+  telegramMsgId   Int?
+  isRead          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+
+  // Связи
+  contactId       String
+  contact         Contact       @relation(fields: [contactId], references: [id])
+  managerId       String?
+  manager         User?         @relation(fields: [managerId], references: [id])
+
+  // Файлы/медиа
+  attachments     Attachment[]
+
+  @@map("messages")
+}
+
+// Вложения к сообщениям
+model Attachment {
+  id          String    @id @default(cuid())
+  filename    String
+  url         String
+  mimeType    String?
+  size        Int?
+  createdAt   DateTime  @default(now())
+
+  messageId   String
+  message     Message   @relation(fields: [messageId], references: [id])
+
+  @@map("attachments")
+}
+
+// Звонки (Mango Office)
+model Call {
+  id              String        @id @default(cuid())
+  mangoCallId     String        @unique
+  direction       String
+  phone           String
+  duration        Int?
+  status          String        @default("INITIATED")
+  recordingUrl    String?
+  createdAt       DateTime      @default(now())
+  answeredAt      DateTime?
+  endedAt         DateTime?
+
+  // Связи
+  contactId       String?
+  contact         Contact?      @relation(fields: [contactId], references: [id])
+  managerId       String?
+  manager         User?         @relation(fields: [managerId], references: [id])
+  transcription   CallTranscription?
+
+  @@map("calls")
+}
+
+// Транскрибация звонков
+model CallTranscription {
+  id          String    @id @default(cuid())
+  text        String
+  summary     String?
+  sentiment   String?
+  keywords    String
+  createdAt   DateTime  @default(now())
+
+  callId      String    @unique
+  call        Call      @relation(fields: [callId], references: [id])
+
+  @@map("call_transcriptions")
+}
+
+// Настройки интеграций
+model Integration {
+  id          String    @id @default(cuid())
+  type        String
+  config      String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("integrations")
+}
