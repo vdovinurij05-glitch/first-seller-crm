@@ -41,7 +41,7 @@ jobs:
             npm run build
 
             echo "🔄 Restarting application..."
-            pm2 restart first-seller-crm || pm2 start npm --name "first-seller-crm" -- start
+            pm2 restart first-seller-crm || pm2 start .next/standalone/server.js --name "first-seller-crm"
 
             echo "✅ Deployment completed!"
             pm2 status
