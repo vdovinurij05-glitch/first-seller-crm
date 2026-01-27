@@ -69,12 +69,21 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await req.json()
-    const { title, amount, stage, probability, description, contactId, managerId, order } = body
+    const { title, amount, stage, probability, description, contactId, managerId, order, pipelineId } = body
 
     // Получаем текущую сделку для сравнения
     const currentDeal = await prisma.deal.findUnique({
       where: { id }
     })
+
+    if (!currentDeal) {
+      return NextResponse.json(
+        { error: 'Сделка не найдена' },
+        { status: 404 }
+      )
+    }
+
+    console.log(`🔧 PATCH /api/deals/${id} - updating deal:`, { stage, pipelineId: pipelineId || currentDeal.pipelineId })
 
     const updateData: any = {}
     if (title !== undefined) updateData.title = title
@@ -85,6 +94,7 @@ export async function PUT(
     if (contactId !== undefined) updateData.contactId = contactId || null
     if (managerId !== undefined) updateData.managerId = managerId || null
     if (order !== undefined) updateData.order = order
+    if (pipelineId !== undefined) updateData.pipelineId = pipelineId || null
 
     // Если переводим в WON или LOST, устанавливаем closedAt
     if (stage === 'WON' || stage === 'LOST') {

@@ -33,6 +33,12 @@ export async function GET(req: NextRequest) {
             id: true,
             name: true
           }
+        },
+        pipeline: {
+          select: {
+            id: true,
+            slug: true
+          }
         }
       },
       orderBy: [
@@ -40,6 +46,11 @@ export async function GET(req: NextRequest) {
         { createdAt: 'desc' }
       ]
     })
+
+    console.log(`📦 GET /api/deals - pipelineSlug: ${pipelineSlug}, found ${deals.length} deals`)
+    if (pipelineSlug && deals.length > 0) {
+      console.log('   First deal:', { id: deals[0].id, stage: deals[0].stage, pipelineId: deals[0].pipelineId })
+    }
 
     return NextResponse.json({ deals })
   } catch (error) {
