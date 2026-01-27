@@ -47,19 +47,19 @@ export default function DraggableDealCard({ deal, onClick }: DraggableDealCardPr
     <div
       ref={setNodeRef}
       style={style}
-      className="relative group"
+      className="flex items-stretch gap-2 group"
     >
-      {/* Drag Handle */}
+      {/* Drag Handle - видимый и draggable */}
       <div
         {...attributes}
         {...listeners}
-        className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        className="flex-shrink-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-gray-100 rounded-lg transition-colors touch-none"
       >
-        <GripVertical className="w-4 h-4 text-gray-400" />
+        <GripVertical className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
       </div>
 
-      {/* Deal Card */}
-      <div className="pl-2">
+      {/* Deal Card - кликабельная, но не draggable */}
+      <div className="flex-1 min-w-0">
         <DealCard deal={deal} onClick={onClick} />
       </div>
     </div>
