@@ -6,6 +6,11 @@ export async function GET() {
   try {
     const pipelines = await prisma.pipeline.findMany({
       include: {
+        stages: {
+          orderBy: {
+            order: 'asc'
+          }
+        },
         _count: {
           select: {
             deals: true

@@ -106,11 +106,13 @@ export default function DealDetailPage() {
 
   const [contacts, setContacts] = useState<any[]>([])
   const [managers, setManagers] = useState<any[]>([])
+  const [pipelines, setPipelines] = useState<any[]>([])
 
   const [editData, setEditData] = useState({
     title: '',
     amount: 0,
     stage: '',
+    pipelineId: '',
     description: '',
     contactId: '',
     managerId: ''
@@ -129,6 +131,7 @@ export default function DealDetailPage() {
   useEffect(() => {
     fetchContacts()
     fetchManagers()
+    fetchPipelines()
 
     if (dealId !== 'new') {
       fetchDeal()
@@ -142,6 +145,7 @@ export default function DealDetailPage() {
         title: '',
         amount: 0,
         stage: 'NEW',
+        pipelineId: '',
         description: '',
         contactId: '',
         managerId: ''
@@ -168,6 +172,7 @@ export default function DealDetailPage() {
           title: data.deal.title,
           amount: data.deal.amount,
           stage: data.deal.stage,
+          pipelineId: data.deal.pipelineId || '',
           description: data.deal.description || '',
           contactId: data.deal.contact?.id || '',
           managerId: data.deal.manager?.id || ''
@@ -177,6 +182,16 @@ export default function DealDetailPage() {
       console.error('Error fetching deal:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchPipelines = async () => {
+    try {
+      const res = await fetch('/api/pipelines')
+      const data = await res.json()
+      setPipelines(data.pipelines || [])
+    } catch (error) {
+      console.error('Error fetching pipelines:', error)
     }
   }
 
@@ -545,18 +560,45 @@ export default function DealDetailPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Этап
+                  Воронка
                 </label>
                 <select
-                  value={editData.stage}
-                  onChange={(e) => setEditData({ ...editData, stage: e.target.value })}
+                  value={editData.pipelineId}
+                  onChange={(e) => {
+                    const pipeline = pipelines.find(p => p.id === e.target.value)
+                    setEditData({
+                      ...editData,
+                      pipelineId: e.target.value,
+                      stage: pipeline?.stages?.[0]?.slug || 'NEW'
+                    })
+                  }}
                   className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 >
-                  {stages.map(stage => (
-                    <option key={stage.id} value={stage.id}>{stage.name}</option>
+                  <option value="">Выберите воронку</option>
+                  {pipelines.map(pipeline => (
+                    <option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>
                   ))}
                 </select>
               </div>
+
+              {editData.pipelineId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Этап
+                  </label>
+                  <select
+                    value={editData.stage}
+                    onChange={(e) => setEditData({ ...editData, stage: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    {(pipelines.find(p => p.id === editData.pipelineId)?.stages || stages).map((stage: any) => (
+                      <option key={stage.id || stage.slug} value={stage.id || stage.slug}>
+                        {stage.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

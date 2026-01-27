@@ -25,6 +25,13 @@ export async function GET(
             id: true,
             name: true
           }
+        },
+        pipeline: {
+          select: {
+            id: true,
+            name: true,
+            slug: true
+          }
         }
       }
     })
