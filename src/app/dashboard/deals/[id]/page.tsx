@@ -105,10 +105,25 @@ export default function DealDetailPage() {
   ]
 
   useEffect(() => {
-    fetchDeal()
-    fetchMessages()
     fetchContacts()
     fetchManagers()
+
+    if (dealId !== 'new') {
+      fetchDeal()
+      fetchMessages()
+    } else {
+      // Для новой сделки устанавливаем режим редактирования
+      setEditing(true)
+      setLoading(false)
+      setEditData({
+        title: '',
+        amount: 0,
+        stage: 'NEW',
+        description: '',
+        contactId: '',
+        managerId: ''
+      })
+    }
   }, [dealId])
 
   useEffect(() => {
@@ -179,20 +194,46 @@ export default function DealDetailPage() {
   }
 
   const handleSave = async () => {
+    if (!editData.title.trim() || !editData.amount) {
+      alert('Заполните обязательные поля: название и сумму')
+      return
+    }
+
     setSaving(true)
     try {
-      const res = await fetch(`/api/deals/${dealId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editData)
-      })
+      if (dealId === 'new') {
+        // Создание новой сделки
+        const res = await fetch('/api/deals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editData)
+        })
 
-      if (res.ok) {
-        await fetchDeal()
-        setEditing(false)
+        if (res.ok) {
+          const data = await res.json()
+          // Перенаправляем на страницу созданной сделки
+          router.push(`/dashboard/deals/${data.deal.id}`)
+        } else {
+          alert('Ошибка при создании сделки')
+        }
+      } else {
+        // Обновление существующей сделки
+        const res = await fetch(`/api/deals/${dealId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editData)
+        })
+
+        if (res.ok) {
+          await fetchDeal()
+          setEditing(false)
+        } else {
+          alert('Ошибка при обновлении сделки')
+        }
       }
     } catch (error) {
-      console.error('Error updating deal:', error)
+      console.error('Error saving deal:', error)
+      alert('Ошибка при сохранении сделки')
     } finally {
       setSaving(false)
     }
@@ -325,13 +366,15 @@ export default function DealDetailPage() {
     )
   }
 
-  if (!deal) {
+  if (!deal && dealId !== 'new') {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-gray-500">Сделка не найдена</p>
       </div>
     )
   }
+
+  const isNewDeal = dealId === 'new'
 
   return (
     <div className="space-y-6">
@@ -345,12 +388,32 @@ export default function DealDetailPage() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{deal.title}</h1>
-            <p className="text-gray-500 mt-1">ID: {deal.id}</p>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isNewDeal ? 'Новая сделка' : deal?.title}
+            </h1>
+            {!isNewDeal && <p className="text-gray-500 mt-1">ID: {dealId}</p>}
           </div>
         </div>
         <div className="flex gap-3">
-          {editing ? (
+          {isNewDeal ? (
+            <>
+              <button
+                onClick={() => router.push('/dashboard/deals')}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition flex items-center gap-2"
+              >
+                <X className="w-5 h-5" />
+                Отмена
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition flex items-center gap-2 disabled:opacity-50"
+              >
+                <Save className="w-5 h-5" />
+                {saving ? 'Создание...' : 'Создать сделку'}
+              </button>
+            </>
+          ) : editing ? (
             <>
               <button
                 onClick={() => setEditing(false)}
@@ -390,9 +453,9 @@ export default function DealDetailPage() {
       </div>
 
       {/* Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${isNewDeal ? 'lg:grid-cols-1 max-w-2xl mx-auto' : 'lg:grid-cols-3'} gap-6`}>
         {/* Left Panel - Deal Info */}
-        <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className={`${isNewDeal ? '' : 'lg:col-span-1'} bg-white rounded-2xl shadow-sm border border-gray-100 p-6`}>
           {editing ? (
             <div className="space-y-4">
               <div>
@@ -535,6 +598,7 @@ export default function DealDetailPage() {
         </div>
 
         {/* Right Panel - Telegram Chat */}
+        {!isNewDeal && (
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col" style={{ height: '700px' }}>
           {/* Chat Header */}
           <div className="p-6 border-b border-gray-100">
@@ -711,6 +775,7 @@ export default function DealDetailPage() {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   )
