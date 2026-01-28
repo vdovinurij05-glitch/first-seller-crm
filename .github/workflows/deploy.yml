@@ -44,8 +44,11 @@ jobs:
             npm run build
 
             echo "🔄 Restarting application..."
-            pm2 delete first-seller-crm 2>/dev/null || true
-            pm2 flush 2>/dev/null || true
+            pm2 kill 2>/dev/null || true
+            sleep 2
+            # Убиваем процессы на порту 3000 если остались
+            fuser -k 3000/tcp 2>/dev/null || true
+            sleep 1
             pm2 start npm --name "first-seller-crm" -- start
 
             echo "✅ Deployment completed!"
