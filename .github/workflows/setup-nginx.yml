@@ -1,0 +1,79 @@
+name: Setup Nginx
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-nginx:
+    name: Configure Nginx
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Nginx and PM2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            echo "=== Installing Nginx if not installed ==="
+            if ! command -v nginx &> /dev/null; then
+                apt-get update
+                apt-get install -y nginx
+            fi
+
+            echo ""
+            echo "=== Configuring Nginx for CRM ==="
+            cat > /etc/nginx/sites-available/first-seller-crm <<'EOF'
+            server {
+                listen 3000;
+                listen [::]:3000;
+                server_name _;
+
+                location / {
+                    proxy_pass http://localhost:3001;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host $host;
+                    proxy_cache_bypass $http_upgrade;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                }
+            }
+            EOF
+
+            echo ""
+            echo "=== Enabling site ==="
+            ln -sf /etc/nginx/sites-available/first-seller-crm /etc/nginx/sites-enabled/
+
+            echo ""
+            echo "=== Updating PM2 to use port 3001 ==="
+            cd /var/www/first-seller-crm
+            pm2 delete first-seller-crm || true
+            PORT=3001 pm2 start npm --name "first-seller-crm" -- start
+            pm2 save
+
+            echo ""
+            echo "=== Testing Nginx config ==="
+            nginx -t
+
+            echo ""
+            echo "=== Restarting Nginx ==="
+            systemctl restart nginx
+
+            echo ""
+            echo "=== Checking services ==="
+            systemctl status nginx --no-pager
+            pm2 status
+
+            echo ""
+            echo "=== Testing local connections ==="
+            echo "Testing port 3001 (app)..."
+            curl -s http://localhost:3001 | head -n 5 || echo "Failed to connect to port 3001"
+
+            echo ""
+            echo "Testing port 3000 (nginx)..."
+            curl -s http://localhost:3000 | head -n 5 || echo "Failed to connect to port 3000"
