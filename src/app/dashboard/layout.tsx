@@ -133,6 +133,32 @@ export default function DashboardLayout({
     return () => clearInterval(interval)
   }, [isAuthenticated])
 
+  // Автосинхронизация звонков из Mango Office каждые 60 секунд
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const syncMangoCalls = async () => {
+      try {
+        console.log('🔄 Syncing Mango calls...')
+        const res = await fetch('/api/mango/sync')
+        if (res.ok) {
+          const data = await res.json()
+          console.log(`✅ Mango sync completed: ${data.synced || 0} calls synced`)
+        }
+      } catch (error) {
+        console.error('Error syncing Mango calls:', error)
+      }
+    }
+
+    // Синхронизируем сразу при загрузке
+    syncMangoCalls()
+
+    // Затем каждые 60 секунд
+    const interval = setInterval(syncMangoCalls, 60000)
+
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
+
   const handleLogout = () => {
     logout()
     router.push('/')
