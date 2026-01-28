@@ -1,0 +1,40 @@
+name: Open Port 3000
+
+on:
+  workflow_dispatch:
+
+jobs:
+  open-port:
+    name: Open Port in Firewall
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Open Port 3000
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            echo "=== Checking firewall status ==="
+            ufw status || echo "UFW not active"
+
+            echo ""
+            echo "=== Opening port 3000 ==="
+            ufw allow 3000/tcp || echo "UFW not installed or not active"
+
+            echo ""
+            echo "=== Checking if ufw is enabled ==="
+            if ! ufw status | grep -q "Status: active"; then
+                echo "UFW is not active, enabling it..."
+                echo "y" | ufw enable
+            fi
+
+            echo ""
+            echo "=== Final firewall status ==="
+            ufw status
+
+            echo ""
+            echo "=== Testing external access ==="
+            curl -I http://localhost:3000 || echo "Failed to access locally"
