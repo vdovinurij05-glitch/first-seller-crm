@@ -97,26 +97,29 @@ async function getRecentCalls(minutes: number = 60): Promise<any> {
       return null
     }
 
-    // CSV парсинг если нужен
+    // CSV парсинг - Mango возвращает данные без заголовков
     if (typeof resultResponse === 'string') {
-      // Если ответ в формате CSV
-      const lines = resultResponse.trim().split('\n')
-      if (lines.length <= 1) {
+      const lines = resultResponse.trim().split('\n').filter(line => line.trim())
+
+      if (lines.length === 0) {
         console.log('⚠️ No calls found in the period')
         return []
       }
 
-      // Парсим CSV
-      const headers = lines[0].split(';')
-      const calls = lines.slice(1).map(line => {
+      // Фиксированные имена полей для Mango CSV (без заголовков)
+      const fieldNames = ['start', 'finish', 'from_number', 'to_number', 'disconnect_reason', 'entry_id']
+
+      const calls = lines.map(line => {
         const values = line.split(';')
         const call: any = {}
-        headers.forEach((header, index) => {
-          call[header] = values[index]
+        fieldNames.forEach((name, index) => {
+          call[name] = values[index]
         })
+        console.log(`📞 Parsed call: from=${call.from_number}, to=${call.to_number}, entry=${call.entry_id}`)
         return call
       })
 
+      console.log(`📊 Parsed ${calls.length} calls from Mango CSV`)
       return calls
     }
 
