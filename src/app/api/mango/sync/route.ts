@@ -15,6 +15,21 @@ const config: MangoConfig = {
   apiSalt: process.env.MANGO_API_SALT || ''
 }
 
+// Нормализация номера телефона для поиска
+function normalizePhone(phone: string): string {
+  // Убираем все нецифровые символы
+  const digits = phone.replace(/\D/g, '')
+  // Если начинается с 8 или 7, возвращаем последние 10 цифр
+  if (digits.length === 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
+    return digits.slice(1)
+  }
+  // Если уже 10 цифр, возвращаем как есть
+  if (digits.length === 10) {
+    return digits
+  }
+  return digits
+}
+
 // Генерация подписи для Mango API
 function generateSign(json: string): string {
   const signString = config.apiKey + json + config.apiSalt
@@ -147,18 +162,31 @@ async function syncCalls(calls: any[]): Promise<number> {
         continue
       }
 
-      // Ищем контакт по номеру (входящий или исходящий)
+      // Нормализуем номера для поиска
+      const normalizedFrom = normalizePhone(fromNumber)
+      const normalizedTo = normalizePhone(toNumber)
+
+      // Создаём варианты номеров для поиска (с разными префиксами)
+      const phoneVariants = [
+        fromNumber, toNumber,
+        normalizedFrom, normalizedTo,
+        `7${normalizedFrom}`, `7${normalizedTo}`,
+        `8${normalizedFrom}`, `8${normalizedTo}`,
+        `+7${normalizedFrom}`, `+7${normalizedTo}`
+      ].filter(Boolean)
+
+      console.log(`🔍 Searching contact with phones:`, phoneVariants.slice(0, 4))
+
+      // Ищем контакт по номеру (входящий или исходящий) с разными форматами
       const contact = await prisma.contact.findFirst({
         where: {
-          OR: [
-            { phone: fromNumber },
-            { phone: toNumber }
-          ]
+          OR: phoneVariants.map(phone => ({ phone }))
         }
       })
 
-      // Определяем направление
-      const isIncoming = contact ? contact.phone === fromNumber : true
+      // Определяем направление (сравниваем нормализованные номера)
+      const contactNormalized = contact?.phone ? normalizePhone(contact.phone) : ''
+      const isIncoming = contact ? (contactNormalized === normalizedFrom) : true
 
       // Определяем статус
       let status = 'COMPLETED'
@@ -176,6 +204,7 @@ async function syncCalls(calls: any[]): Promise<number> {
       // Находим активную сделку для контакта
       let dealId = null
       if (contact) {
+        console.log(`✅ Found contact: ${contact.name} (${contact.phone})`)
         const activeDeal = await prisma.deal.findFirst({
           where: {
             contactId: contact.id,
@@ -186,6 +215,13 @@ async function syncCalls(calls: any[]): Promise<number> {
           }
         })
         dealId = activeDeal?.id
+        if (dealId) {
+          console.log(`✅ Found active deal: ${activeDeal?.title} (${dealId})`)
+        } else {
+          console.log(`⚠️ No active deal found for contact ${contact.name}`)
+        }
+      } else {
+        console.log(`⚠️ No contact found for phones: ${fromNumber} / ${toNumber}`)
       }
 
       // Создаем запись звонка

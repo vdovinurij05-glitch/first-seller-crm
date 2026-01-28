@@ -133,7 +133,7 @@ export default function DashboardLayout({
     return () => clearInterval(interval)
   }, [isAuthenticated])
 
-  // Автосинхронизация звонков из Mango Office каждые 60 секунд
+  // Автосинхронизация звонков из Mango Office каждые 5 минут
   useEffect(() => {
     if (!isAuthenticated) return
 
@@ -153,8 +153,8 @@ export default function DashboardLayout({
     // Синхронизируем сразу при загрузке
     syncMangoCalls()
 
-    // Затем каждые 60 секунд
-    const interval = setInterval(syncMangoCalls, 60000)
+    // Затем каждые 5 минут (300000 мс)
+    const interval = setInterval(syncMangoCalls, 300000)
 
     return () => clearInterval(interval)
   }, [isAuthenticated])
