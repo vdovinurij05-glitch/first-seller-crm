@@ -1,0 +1,64 @@
+name: Emergency Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Emergency Deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy with Extended Timeout
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          timeout: 120s
+          command_timeout: 15m
+          script: |
+            echo "=== Opening SSH port in firewall ==="
+            sudo ufw allow 22/tcp || echo "UFW not available or already open"
+
+            echo ""
+            echo "=== Checking firewall status ==="
+            sudo ufw status || echo "UFW status check failed"
+
+            echo ""
+            echo "=== Navigating to project ==="
+            cd /var/www/first-seller-crm || exit 1
+
+            echo ""
+            echo "🔄 Pulling latest code..."
+            git pull origin main
+
+            echo ""
+            echo "📦 Installing dependencies..."
+            npm ci --prefer-offline --no-audit
+
+            echo ""
+            echo "🗄️ Running database migrations..."
+            npx prisma generate
+            npx prisma migrate deploy
+
+            echo ""
+            echo "🏗️ Building application..."
+            npm run build
+
+            echo ""
+            echo "🔄 Restarting application..."
+            pm2 restart first-seller-crm || pm2 start npm --name "first-seller-crm" -- start
+
+            echo ""
+            echo "✅ Deployment completed!"
+            pm2 status
+
+            echo ""
+            echo "=== Final firewall status ==="
+            sudo ufw status verbose || echo "Could not check UFW status"
