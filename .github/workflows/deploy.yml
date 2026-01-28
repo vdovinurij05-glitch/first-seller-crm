@@ -44,7 +44,9 @@ jobs:
             npm run build
 
             echo "🔄 Restarting application..."
-            pm2 restart first-seller-crm || pm2 start npm --name "first-seller-crm" -- start
+            pm2 delete first-seller-crm 2>/dev/null || true
+            pm2 flush 2>/dev/null || true
+            pm2 start npm --name "first-seller-crm" -- start
 
             echo "✅ Deployment completed!"
             pm2 status
