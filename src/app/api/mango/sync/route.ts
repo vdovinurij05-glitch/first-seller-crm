@@ -147,6 +147,7 @@ async function syncCalls(calls: any[]): Promise<number> {
       })
 
       if (existingCall) {
+        console.log(`⏭️ Skipping duplicate call: ${entryId}`)
         continue
       }
 
