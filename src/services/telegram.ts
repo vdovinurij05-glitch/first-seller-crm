@@ -5,8 +5,18 @@ import * as fsSync from 'fs'
 import path from 'path'
 import https from 'https'
 
-// Инициализация бота
-const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN || '')
+// Ленивая инициализация бота (только при первом использовании)
+let _bot: Bot | null = null
+function getBot(): Bot {
+  if (!_bot) {
+    const token = process.env.TELEGRAM_BOT_TOKEN
+    if (!token) {
+      throw new Error('TELEGRAM_BOT_TOKEN is not configured')
+    }
+    _bot = new Bot(token)
+  }
+  return _bot
+}
 
 // Типы для контекста
 interface MessageContext extends Context {
@@ -30,7 +40,7 @@ ensureUploadsDir()
 // Функция для скачивания файла из Telegram
 async function downloadTelegramFile(fileId: string, filename: string): Promise<string> {
   try {
-    const file = await bot.api.getFile(fileId)
+    const file = await getBot().api.getFile(fileId)
     const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`
 
     const timestamp = Date.now()
@@ -59,7 +69,7 @@ async function downloadTelegramFile(fileId: string, filename: string): Promise<s
 // Функция для получения аватарки пользователя
 async function getUserAvatar(userId: number): Promise<string | null> {
   try {
-    const photos = await bot.api.getUserProfilePhotos(userId, { limit: 1 })
+    const photos = await getBot().api.getUserProfilePhotos(userId, { limit: 1 })
 
     if (photos.total_count > 0 && photos.photos[0]?.length > 0) {
       const photo = photos.photos[0][0]
@@ -129,8 +139,10 @@ async function createContactAndDeal(ctx: MessageContext) {
   }
 }
 
-// Обработка входящих текстовых сообщений
-bot.on('message:text', async (ctx: MessageContext) => {
+// Регистрация обработчиков (вызывается только при старте бота)
+function setupHandlers(bot: Bot) {
+  // Обработка входящих текстовых сообщений
+  bot.on('message:text', async (ctx: MessageContext) => {
   const telegramId = ctx.from?.id.toString()
   const text = ctx.message.text
   const messageId = ctx.message.message_id
@@ -387,6 +399,7 @@ bot.on('message:video_note', async (ctx) => {
     console.error('Error processing telegram video note:', error)
   }
 })
+} // Закрываем setupHandlers
 
 // Отправка сообщения в Telegram
 export async function sendTelegramMessage(
@@ -395,7 +408,7 @@ export async function sendTelegramMessage(
   managerId?: string
 ): Promise<number | null> {
   try {
-    const result = await bot.api.sendMessage(telegramId, text)
+    const result = await getBot().api.sendMessage(telegramId, text)
 
     // Сохраняем исходящее сообщение
     const contact = await prisma.contact.findUnique({
@@ -437,13 +450,13 @@ export async function sendTelegramFile(
     let result: any
 
     if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
-      result = await bot.api.sendPhoto(telegramId, fullPath, { caption })
+      result = await getBot().api.sendPhoto(telegramId, fullPath, { caption })
     } else if (['.mp4', '.avi', '.mov'].includes(ext)) {
-      result = await bot.api.sendVideo(telegramId, fullPath, { caption })
+      result = await getBot().api.sendVideo(telegramId, fullPath, { caption })
     } else if (['.mp3', '.wav', '.ogg'].includes(ext)) {
-      result = await bot.api.sendAudio(telegramId, fullPath, { caption })
+      result = await getBot().api.sendAudio(telegramId, fullPath, { caption })
     } else {
-      result = await bot.api.sendDocument(telegramId, fullPath, { caption })
+      result = await getBot().api.sendDocument(telegramId, fullPath, { caption })
     }
 
     // Сохраняем исходящее сообщение
@@ -476,8 +489,11 @@ export async function sendTelegramFile(
 
 // Запуск бота в polling режиме
 export async function startBot() {
+  const bot = getBot()
+  setupHandlers(bot)
   await bot.start()
   console.log('✅ Telegram bot started in polling mode')
 }
 
-export { bot }
+// Экспорт функции получения бота для совместимости
+export { getBot as bot }
