@@ -57,6 +57,13 @@ jobs:
             echo "✅ Deployment completed!"
             pm2 status
 
+            echo "🔍 Verifying deployed code..."
+            head -20 src/app/api/mango/sync/route.ts
+            echo ""
+            echo "🔍 Testing sync endpoint..."
+            sleep 5
+            curl -s http://localhost:3000/api/mango/sync
+
       - name: Setup Telegram Webhook
         uses: appleboy/ssh-action@v1.0.0
         with:
