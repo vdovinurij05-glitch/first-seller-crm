@@ -24,8 +24,11 @@ jobs:
           script: |
             cd /var/www/first-seller-crm || exit 1
 
-            echo "🔄 Pulling latest code..."
-            git pull origin main
+            echo "🔄 Resetting to latest code from GitHub..."
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
+            echo "✅ Code synced to commit: $(git rev-parse HEAD)"
 
             echo "📦 Installing dependencies..."
             npm ci
