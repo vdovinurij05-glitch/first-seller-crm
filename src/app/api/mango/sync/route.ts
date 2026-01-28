@@ -280,6 +280,7 @@ async function syncCalls(calls: any[]): Promise<number> {
 }
 
 export async function GET() {
+  console.log('🚀 Mango sync v2.0 - with phone normalization')
   try {
     // Получаем звонки за последний час
     const calls = await getRecentCalls(60)
