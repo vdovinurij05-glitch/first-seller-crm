@@ -37,6 +37,9 @@ jobs:
             echo "🌱 Seeding database (if needed)..."
             npm run db:seed || true
 
+            echo "🧹 Cleaning build cache..."
+            rm -rf .next
+
             echo "🏗️ Building application..."
             npm run build
 
