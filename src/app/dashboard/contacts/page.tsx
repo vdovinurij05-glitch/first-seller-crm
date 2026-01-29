@@ -128,29 +128,16 @@ export default function ContactsPage() {
     router.push(`/dashboard/contacts/${contactId}`)
   }
 
-  // Скачивание шаблона XLS
+  // Скачивание шаблона CSV
   const downloadTemplate = () => {
-    const xlsContent = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head><meta charset="UTF-8"></head>
-      <body>
-        <table>
-          <tr>
-            <th>Имя</th>
-            <th>Email</th>
-            <th>Телефон</th>
-            <th>Комментарий</th>
-          </tr>
-        </table>
-      </body>
-      </html>
-    `
+    // Используем ; как разделитель для корректного открытия в Excel
+    const csvContent = 'Имя;Email;Телефон;Комментарий'
 
-    const blob = new Blob([xlsContent], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'contacts_template.xls'
+    link.download = 'contacts_template.csv'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -525,7 +512,7 @@ export default function ContactsPage() {
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-xl font-medium hover:bg-green-100 transition"
               >
                 <Download className="w-5 h-5" />
-                Скачать шаблон XLS
+                Скачать шаблон CSV
               </button>
 
               <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
@@ -560,8 +547,8 @@ export default function ContactsPage() {
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <p className="text-sm text-blue-800 font-medium mb-2">Формат файла:</p>
                 <pre className="text-xs text-blue-900 bg-white p-2 rounded overflow-x-auto">
-Имя,Email,Телефон,Комментарий{'\n'}
-Иван Иванов,ivan@mail.ru,+79991234567,Клиент из рекламы
+Имя;Email;Телефон;Комментарий{'\n'}
+Иван Иванов;ivan@mail.ru;+79991234567;Клиент из рекламы
                 </pre>
               </div>
             </div>

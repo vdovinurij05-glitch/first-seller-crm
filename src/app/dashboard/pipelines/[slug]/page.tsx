@@ -211,30 +211,16 @@ export default function PipelinePage() {
       .sort((a, b) => a.order - b.order)
   }
 
-  // Скачивание шаблона XLS для сделок
+  // Скачивание шаблона CSV для сделок
   const downloadTemplate = () => {
-    const xlsContent = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head><meta charset="UTF-8"></head>
-      <body>
-        <table>
-          <tr>
-            <th>Название</th>
-            <th>Сумма</th>
-            <th>Контакт (телефон)</th>
-            <th>Этап</th>
-            <th>Описание</th>
-          </tr>
-        </table>
-      </body>
-      </html>
-    `
+    // Используем ; как разделитель для корректного открытия в Excel
+    const csvContent = 'Название;Сумма;Контакт (телефон);Этап;Описание'
 
-    const blob = new Blob([xlsContent], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'deals_template.xls'
+    link.download = 'deals_template.csv'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -410,7 +396,7 @@ export default function PipelinePage() {
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-xl font-medium hover:bg-green-100 transition"
               >
                 <Download className="w-5 h-5" />
-                Скачать шаблон XLS
+                Скачать шаблон CSV
               </button>
 
               <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
@@ -445,8 +431,8 @@ export default function PipelinePage() {
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <p className="text-sm text-blue-800 font-medium mb-2">Формат файла:</p>
                 <pre className="text-xs text-blue-900 bg-white p-2 rounded overflow-x-auto">
-Название,Сумма,Контакт (телефон),Этап,Описание{'\n'}
-Сделка с клиентом,100000,+79991234567,{pipeline?.stages[0]?.slug || 'NEW'},Описание
+Название;Сумма;Контакт (телефон);Этап;Описание{'\n'}
+Сделка с клиентом;100000;+79991234567;{pipeline?.stages[0]?.slug || 'NEW'};Описание
                 </pre>
                 <p className="text-xs text-blue-700 mt-2">
                   Доступные этапы: {pipeline?.stages.map(s => s.slug).join(', ')}
