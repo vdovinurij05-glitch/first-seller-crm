@@ -244,3 +244,24 @@ model Integration {
 
   @@map("integrations")
 }
+
+// Задачи и напоминания
+model Task {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  type          String    @default("CALL") // CALL, MEETING, TODO, OTHER
+  status        String    @default("PENDING") // PENDING, COMPLETED, CANCELLED
+  dueDate       DateTime  // Дата и время напоминания
+  reminderSent  Boolean   @default(false)
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Связи
+  dealId        String?
+  contactId     String?
+  userId        String?
+
+  @@map("tasks")
+}

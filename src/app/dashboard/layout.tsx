@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react'
 import DealNotification from '@/components/DealNotification'
+import TaskNotificationProvider from '@/components/tasks/TaskNotificationProvider'
 
 interface NotificationData {
   id: string
@@ -186,6 +187,7 @@ export default function DashboardLayout({
   }
 
   return (
+    <TaskNotificationProvider>
     <div className="min-h-screen bg-gray-50">
       {/* Mobile sidebar toggle */}
       <button
@@ -282,5 +284,6 @@ export default function DashboardLayout({
         ))}
       </div>
     </div>
+    </TaskNotificationProvider>
   )
 }

@@ -21,8 +21,11 @@ import {
   Video,
   Mic,
   Activity,
-  CheckCircle2
+  CheckCircle2,
+  Bell,
+  Phone
 } from 'lucide-react'
+import TaskModal from '@/components/tasks/TaskModal'
 
 interface Deal {
   id: string
@@ -99,6 +102,7 @@ export default function DealDetailPage() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [showTaskModal, setShowTaskModal] = useState(false)
 
   const [inputMode, setInputMode] = useState<'message' | 'comment'>('comment')
   const [messageContent, setMessageContent] = useState('')
@@ -866,7 +870,8 @@ export default function DealDetailPage() {
 
           {/* Input Section */}
           <div className="p-6 border-t border-gray-100 space-y-3">
-            {/* Mode Toggle */}
+            {/* Mode Toggle + Task Button */}
+            <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg w-fit">
               <button
                 onClick={() => setInputMode('comment')}
@@ -896,6 +901,16 @@ export default function DealDetailPage() {
                   </div>
                 </button>
               )}
+            </div>
+
+              {/* Task/Reminder Button */}
+              <button
+                onClick={() => setShowTaskModal(true)}
+                className="px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg text-sm font-medium transition flex items-center gap-2"
+              >
+                <Bell className="w-4 h-4" />
+                Напоминание
+              </button>
             </div>
 
             {selectedFile && inputMode === 'message' && (
@@ -982,6 +997,18 @@ export default function DealDetailPage() {
         </div>
         )}
       </div>
+
+      {/* Task Modal */}
+      <TaskModal
+        isOpen={showTaskModal}
+        onClose={() => setShowTaskModal(false)}
+        dealId={dealId}
+        contactId={deal?.contact?.id}
+        contactName={deal?.contact?.name}
+        onTaskCreated={() => {
+          // Можно добавить уведомление об успешном создании
+        }}
+      />
     </div>
   )
 }
