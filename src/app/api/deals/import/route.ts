@@ -175,15 +175,16 @@ export async function POST(req: NextRequest) {
           stage = defaultStage
         }
 
-        // Ищем контакт по телефону если указан
+        // Ищем или создаём контакт по телефону
         let contactId: string | null = null
         if (deal.contactPhone) {
           const normalized = normalizePhone(deal.contactPhone)
+          const phoneForSave = `+7${normalized}` // Нормализованный формат для сохранения
           console.log(`🔍 Поиск контакта по телефону: ${deal.contactPhone}, нормализованный: ${normalized}`)
 
           if (normalized && normalized.length >= 10) {
             // Ищем контакт: точное совпадение ИЛИ содержит последние 10 цифр
-            const contact = await prisma.contact.findFirst({
+            let contact = await prisma.contact.findFirst({
               where: {
                 OR: [
                   { phone: deal.contactPhone },
@@ -197,13 +198,18 @@ export async function POST(req: NextRequest) {
               contactId = contact.id
               console.log(`✅ Найден контакт: ${contact.name} (${contact.phone})`)
             } else {
-              console.log(`❌ Контакт не найден для телефона: ${deal.contactPhone}`)
-              // Выведем все контакты для отладки
-              const allContacts = await prisma.contact.findMany({
-                select: { name: true, phone: true },
-                take: 10
+              // Создаём новый контакт
+              const contactName = deal.title || `Контакт ${phoneForSave}`
+              contact = await prisma.contact.create({
+                data: {
+                  name: contactName,
+                  phone: phoneForSave,
+                  source: 'import',
+                  status: 'NEW'
+                }
               })
-              console.log('📋 Существующие контакты:', allContacts)
+              contactId = contact.id
+              console.log(`➕ Создан контакт: ${contact.name} (${contact.phone})`)
             }
           }
         }
