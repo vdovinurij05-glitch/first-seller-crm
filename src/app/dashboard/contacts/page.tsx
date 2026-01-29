@@ -131,8 +131,7 @@ export default function ContactsPage() {
   // Скачивание шаблона CSV
   const downloadTemplate = () => {
     const headers = 'Имя,Email,Телефон,Комментарий'
-    const exampleRow = 'Иван Иванов,ivan@mail.ru,+79991234567,Клиент из рекламы'
-    const csvContent = `${headers}\n${exampleRow}`
+    const csvContent = headers
 
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)

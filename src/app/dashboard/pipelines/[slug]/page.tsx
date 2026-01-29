@@ -213,10 +213,8 @@ export default function PipelinePage() {
 
   // Скачивание шаблона CSV для сделок
   const downloadTemplate = () => {
-    const stagesList = pipeline?.stages.map(s => s.slug).join(' / ') || 'NEW'
     const headers = 'Название,Сумма,Контакт (телефон),Этап,Описание'
-    const exampleRow = `Сделка с клиентом,100000,+79991234567,${pipeline?.stages[0]?.slug || 'NEW'},Описание сделки`
-    const csvContent = `${headers}\n${exampleRow}`
+    const csvContent = headers
 
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
