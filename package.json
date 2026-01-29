@@ -12,7 +12,8 @@
     "db:studio": "prisma studio",
     "telegram:start": "tsx scripts/start-telegram-bot.ts",
     "telegram:setup": "tsx scripts/setup-telegram-webhook.ts",
-    "telegram:remove": "tsx scripts/setup-telegram-webhook.ts remove"
+    "telegram:remove": "tsx scripts/setup-telegram-webhook.ts remove",
+    "parse:wb": "tsx scripts/wb-inn-parser.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -31,6 +32,9 @@
     "lucide-react": "^0.563.0",
     "next": "16.1.4",
     "prisma": "^5.22.0",
+    "puppeteer": "^24.36.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "socket.io": "^4.8.3",

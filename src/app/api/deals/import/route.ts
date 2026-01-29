@@ -178,14 +178,18 @@ export async function POST(req: NextRequest) {
         // Ищем контакт по телефону если указан
         let contactId: string | null = null
         if (deal.contactPhone) {
-          const phoneVariants = getPhoneVariants(deal.contactPhone)
-          console.log(`🔍 Поиск контакта по телефону: ${deal.contactPhone}, варианты:`, phoneVariants)
+          const normalized = normalizePhone(deal.contactPhone)
+          console.log(`🔍 Поиск контакта по телефону: ${deal.contactPhone}, нормализованный: ${normalized}`)
 
-          if (phoneVariants.length > 0) {
-            // Ищем контакт по любому из вариантов телефона
+          if (normalized && normalized.length >= 10) {
+            // Ищем контакт: точное совпадение ИЛИ содержит последние 10 цифр
             const contact = await prisma.contact.findFirst({
               where: {
-                OR: phoneVariants.map(variant => ({ phone: variant }))
+                OR: [
+                  { phone: deal.contactPhone },
+                  { phone: { contains: normalized } },
+                  { phone: { contains: normalized.slice(-10) } }
+                ]
               }
             })
 
@@ -194,6 +198,12 @@ export async function POST(req: NextRequest) {
               console.log(`✅ Найден контакт: ${contact.name} (${contact.phone})`)
             } else {
               console.log(`❌ Контакт не найден для телефона: ${deal.contactPhone}`)
+              // Выведем все контакты для отладки
+              const allContacts = await prisma.contact.findMany({
+                select: { name: true, phone: true },
+                take: 10
+              })
+              console.log('📋 Существующие контакты:', allContacts)
             }
           }
         }
