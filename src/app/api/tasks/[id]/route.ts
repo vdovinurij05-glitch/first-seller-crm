@@ -40,6 +40,9 @@ export async function PATCH(
     const body = await req.json()
     const { title, description, type, dueDate, status, reminderSent } = body
 
+    // Получаем задачу до обновления чтобы проверить статус
+    const existingTask = await prisma.task.findUnique({ where: { id } })
+
     const updateData: any = {}
 
     if (title !== undefined) updateData.title = title
@@ -58,6 +61,20 @@ export async function PATCH(
       where: { id },
       data: updateData
     })
+
+    // Если задача была выполнена - записываем в ленту активности
+    if (status === 'COMPLETED' && existingTask?.status !== 'COMPLETED' && existingTask?.dealId) {
+      await prisma.dealComment.create({
+        data: {
+          content: `✅ Задача выполнена: "${task.title}"`,
+          type: 'SYSTEM_EVENT',
+          eventType: 'TASK_COMPLETED',
+          metadata: JSON.stringify({ taskId: task.id }),
+          dealId: existingTask.dealId,
+          userId: existingTask.userId
+        }
+      })
+    }
 
     return NextResponse.json(task)
   } catch (error) {

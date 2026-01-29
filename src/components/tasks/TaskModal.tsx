@@ -12,6 +12,10 @@ interface TaskModalProps {
   onTaskCreated?: () => void
 }
 
+// Генерируем массивы для часов (0-23) и минут (0-55 с шагом 5)
+const hoursOptions = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+const minutesOptions = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
+
 export default function TaskModal({
   isOpen,
   onClose,
@@ -24,27 +28,29 @@ export default function TaskModal({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
+  const [hours, setHours] = useState('12')
+  const [minutes, setMinutes] = useState('00')
 
   // Предустановленные варианты времени
   const quickTimes = [
-    { label: 'Через 15 мин', minutes: 15 },
-    { label: 'Через 30 мин', minutes: 30 },
-    { label: 'Через 1 час', minutes: 60 },
-    { label: 'Через 3 часа', minutes: 180 },
+    { label: 'Через 15 мин', mins: 15 },
+    { label: 'Через 30 мин', mins: 30 },
+    { label: 'Через 1 час', mins: 60 },
+    { label: 'Через 3 часа', mins: 180 },
     { label: 'Завтра 10:00', tomorrow: true, hour: 10 },
     { label: 'Завтра 14:00', tomorrow: true, hour: 14 }
   ]
 
   useEffect(() => {
     if (isOpen) {
-      // Устанавливаем значения по умолчанию
       const now = new Date()
       const defaultDate = now.toISOString().split('T')[0]
-      const defaultTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
       setDate(defaultDate)
-      setTime(defaultTime)
+      setHours(String(now.getHours()).padStart(2, '0'))
+      // Округляем минуты до ближайших 5
+      const roundedMinutes = Math.ceil(now.getMinutes() / 5) * 5
+      setMinutes(String(roundedMinutes >= 60 ? 0 : roundedMinutes).padStart(2, '0'))
       setTitle(contactName ? `Перезвонить ${contactName}` : 'Перезвонить')
       setDescription('')
     }
@@ -56,27 +62,29 @@ export default function TaskModal({
     if (option.tomorrow) {
       const tomorrow = new Date(now)
       tomorrow.setDate(tomorrow.getDate() + 1)
-      tomorrow.setHours(option.hour!, 0, 0, 0)
       setDate(tomorrow.toISOString().split('T')[0])
-      setTime(`${String(option.hour).padStart(2, '0')}:00`)
-    } else if (option.minutes) {
-      const future = new Date(now.getTime() + option.minutes * 60 * 1000)
+      setHours(String(option.hour).padStart(2, '0'))
+      setMinutes('00')
+    } else if (option.mins) {
+      const future = new Date(now.getTime() + option.mins * 60 * 1000)
       setDate(future.toISOString().split('T')[0])
-      setTime(`${String(future.getHours()).padStart(2, '0')}:${String(future.getMinutes()).padStart(2, '0')}`)
+      setHours(String(future.getHours()).padStart(2, '0'))
+      const roundedMinutes = Math.round(future.getMinutes() / 5) * 5
+      setMinutes(String(roundedMinutes >= 60 ? 55 : roundedMinutes).padStart(2, '0'))
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!title.trim() || !date || !time) {
+    if (!title.trim() || !date) {
       alert('Заполните все обязательные поля')
       return
     }
 
     setLoading(true)
     try {
-      const dueDate = new Date(`${date}T${time}:00`)
+      const dueDate = new Date(`${date}T${hours}:${minutes}:00`)
 
       const res = await fetch('/api/tasks', {
         method: 'POST',
@@ -92,11 +100,6 @@ export default function TaskModal({
       })
 
       if (res.ok) {
-        // Запрашиваем разрешение на уведомления
-        if ('Notification' in window && Notification.permission === 'default') {
-          await Notification.requestPermission()
-        }
-
         onTaskCreated?.()
         onClose()
       } else {
@@ -189,17 +192,31 @@ export default function TaskModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Время
+                Время (24ч)
               </label>
-              <div className="relative">
-                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  required
-                />
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <select
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    className="w-full pl-10 pr-2 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent appearance-none bg-white text-center font-medium"
+                  >
+                    {hoursOptions.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+                <span className="text-xl font-bold text-gray-400">:</span>
+                <select
+                  value={minutes}
+                  onChange={(e) => setMinutes(e.target.value)}
+                  className="flex-1 px-2 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent appearance-none bg-white text-center font-medium"
+                >
+                  {minutesOptions.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

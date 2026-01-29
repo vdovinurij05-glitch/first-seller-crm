@@ -23,7 +23,9 @@ import {
   Activity,
   CheckCircle2,
   Bell,
-  Phone
+  Phone,
+  Clock,
+  Check
 } from 'lucide-react'
 import TaskModal from '@/components/tasks/TaskModal'
 
@@ -83,6 +85,18 @@ interface Comment {
   }
 }
 
+interface Task {
+  id: string
+  title: string
+  description?: string
+  type: string
+  status: string
+  dueDate: string
+  reminderSent: boolean
+  completedAt?: string
+  createdAt: string
+}
+
 type ActivityItem = (Message | Comment) & {
   itemType: 'message' | 'comment'
 }
@@ -97,6 +111,7 @@ export default function DealDetailPage() {
   const [deal, setDeal] = useState<Deal | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [comments, setComments] = useState<Comment[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -141,6 +156,7 @@ export default function DealDetailPage() {
       fetchDeal()
       fetchMessages()
       fetchComments()
+      fetchTasks()
     } else {
       // Для новой сделки устанавливаем режим редактирования
       setEditing(true)
@@ -220,6 +236,34 @@ export default function DealDetailPage() {
       }
     } catch (error) {
       console.error('Error fetching comments:', error)
+    }
+  }
+
+  const fetchTasks = async () => {
+    try {
+      const res = await fetch(`/api/tasks?dealId=${dealId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setTasks(data.tasks || [])
+      }
+    } catch (error) {
+      console.error('Error fetching tasks:', error)
+    }
+  }
+
+  const handleCompleteTask = async (taskId: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'COMPLETED' })
+      })
+      if (res.ok) {
+        await fetchTasks()
+        await fetchComments() // Обновляем комментарии чтобы увидеть системное событие
+      }
+    } catch (error) {
+      console.error('Error completing task:', error)
     }
   }
 
@@ -726,6 +770,59 @@ export default function DealDetailPage() {
             </div>
           </div>
 
+          {/* Pending Tasks */}
+          {tasks.filter(t => t.status === 'PENDING').length > 0 && (
+            <div className="px-6 pt-4 pb-2 border-b border-gray-100">
+              <div className="space-y-2">
+                {tasks.filter(t => t.status === 'PENDING').map((task) => {
+                  const dueDate = new Date(task.dueDate)
+                  const isOverdue = dueDate < new Date()
+                  const formatTaskTime = (date: Date) => {
+                    const day = String(date.getDate()).padStart(2, '0')
+                    const month = String(date.getMonth() + 1).padStart(2, '0')
+                    const hours = String(date.getHours()).padStart(2, '0')
+                    const minutes = String(date.getMinutes()).padStart(2, '0')
+                    return `${day}.${month} в ${hours}:${minutes}`
+                  }
+                  return (
+                    <div
+                      key={task.id}
+                      className={`flex items-center justify-between p-3 rounded-xl border ${
+                        isOverdue
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-orange-50 border-orange-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${isOverdue ? 'bg-red-100' : 'bg-orange-100'}`}>
+                          <Bell className={`w-4 h-4 ${isOverdue ? 'text-red-600' : 'text-orange-600'}`} />
+                        </div>
+                        <div>
+                          <p className={`font-medium text-sm ${isOverdue ? 'text-red-900' : 'text-gray-900'}`}>
+                            {task.title}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <Clock className="w-3 h-3" />
+                            <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                              {isOverdue ? 'Просрочено: ' : ''}{formatTaskTime(dueDate)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleCompleteTask(task.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition"
+                      >
+                        <Check className="w-3 h-3" />
+                        Выполнено
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Activity Feed */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {(() => {
@@ -1006,7 +1103,8 @@ export default function DealDetailPage() {
         contactId={deal?.contact?.id}
         contactName={deal?.contact?.name}
         onTaskCreated={() => {
-          // Можно добавить уведомление об успешном создании
+          fetchTasks()
+          fetchComments()
         }}
       />
     </div>

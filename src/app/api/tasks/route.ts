@@ -68,6 +68,27 @@ export async function POST(req: NextRequest) {
       }
     })
 
+    // Создаём системное событие в ленте активности сделки
+    if (dealId) {
+      const dueDateFormatted = new Date(dueDate).toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })
+      await prisma.dealComment.create({
+        data: {
+          content: `📅 Создано напоминание: "${title}" на ${dueDateFormatted}`,
+          type: 'SYSTEM_EVENT',
+          eventType: 'TASK_CREATED',
+          metadata: JSON.stringify({ taskId: task.id }),
+          dealId,
+          userId
+        }
+      })
+    }
+
     return NextResponse.json(task)
   } catch (error) {
     console.error('Error creating task:', error)
