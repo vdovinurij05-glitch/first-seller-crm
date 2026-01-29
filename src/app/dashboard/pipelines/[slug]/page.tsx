@@ -246,7 +246,10 @@ export default function PipelinePage() {
       const data = await res.json()
 
       if (res.ok) {
-        alert(`Успешно импортировано: ${data.imported} сделок`)
+        const messages = []
+        if (data.imported > 0) messages.push(`создано: ${data.imported}`)
+        if (data.updated > 0) messages.push(`обновлено: ${data.updated}`)
+        alert(`Успешно ${messages.join(', ')} сделок`)
         setShowImportModal(false)
         fetchDeals()
       } else {
