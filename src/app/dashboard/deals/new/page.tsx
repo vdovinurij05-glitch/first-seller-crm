@@ -140,10 +140,10 @@ export default function NewDealPage() {
       })
 
       if (res.ok) {
-        const data = await res.json()
+        const contact = await res.json()
         // Добавляем новый контакт в список и выбираем его
-        setContacts(prev => [...prev, data.contact])
-        setFormData(prev => ({ ...prev, contactId: data.contact.id }))
+        setContacts(prev => [...prev, contact])
+        setFormData(prev => ({ ...prev, contactId: contact.id }))
         setShowContactModal(false)
         setNewContact({ name: '', phone: '', email: '' })
       } else {
