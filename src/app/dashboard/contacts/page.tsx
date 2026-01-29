@@ -128,16 +128,29 @@ export default function ContactsPage() {
     router.push(`/dashboard/contacts/${contactId}`)
   }
 
-  // Скачивание шаблона CSV
+  // Скачивание шаблона XLS
   const downloadTemplate = () => {
-    const headers = 'Имя,Email,Телефон,Комментарий'
-    const csvContent = headers
+    const xlsContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="UTF-8"></head>
+      <body>
+        <table>
+          <tr>
+            <th>Имя</th>
+            <th>Email</th>
+            <th>Телефон</th>
+            <th>Комментарий</th>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob([xlsContent], { type: 'application/vnd.ms-excel;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'contacts_template.csv'
+    link.download = 'contacts_template.xls'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -512,7 +525,7 @@ export default function ContactsPage() {
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-xl font-medium hover:bg-green-100 transition"
               >
                 <Download className="w-5 h-5" />
-                Скачать шаблон CSV
+                Скачать шаблон XLS
               </button>
 
               <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">

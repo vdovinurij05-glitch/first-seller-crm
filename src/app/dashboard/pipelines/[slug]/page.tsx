@@ -211,16 +211,30 @@ export default function PipelinePage() {
       .sort((a, b) => a.order - b.order)
   }
 
-  // Скачивание шаблона CSV для сделок
+  // Скачивание шаблона XLS для сделок
   const downloadTemplate = () => {
-    const headers = 'Название,Сумма,Контакт (телефон),Этап,Описание'
-    const csvContent = headers
+    const xlsContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="UTF-8"></head>
+      <body>
+        <table>
+          <tr>
+            <th>Название</th>
+            <th>Сумма</th>
+            <th>Контакт (телефон)</th>
+            <th>Этап</th>
+            <th>Описание</th>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob([xlsContent], { type: 'application/vnd.ms-excel;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'deals_template.csv'
+    link.download = 'deals_template.xls'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -396,7 +410,7 @@ export default function PipelinePage() {
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-xl font-medium hover:bg-green-100 transition"
               >
                 <Download className="w-5 h-5" />
-                Скачать шаблон CSV
+                Скачать шаблон XLS
               </button>
 
               <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
