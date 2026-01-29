@@ -1,16 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
+// Маппинг русских названий колонок на английские
+const columnMapping: Record<string, string> = {
+  'Имя': 'name',
+  'имя': 'name',
+  'Name': 'name',
+  'name': 'name',
+  'Email': 'email',
+  'email': 'email',
+  'Почта': 'email',
+  'почта': 'email',
+  'Телефон': 'phone',
+  'телефон': 'phone',
+  'Phone': 'phone',
+  'phone': 'phone',
+  'Комментарий': 'notes',
+  'комментарий': 'notes',
+  'Notes': 'notes',
+  'notes': 'notes',
+  'Заметки': 'notes',
+  'заметки': 'notes'
+}
+
 // Парсинг CSV
 function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.trim().split('\n')
+  // Удаляем BOM если есть
+  const cleanText = text.replace(/^\ufeff/, '')
+  const lines = cleanText.trim().split('\n')
   if (lines.length < 2) return []
 
-  const headers = lines[0].split(',').map(h => h.trim())
+  // Парсим заголовки с учётом разделителя (запятая или точка с запятой)
+  const separator = lines[0].includes(';') ? ';' : ','
+  const rawHeaders = lines[0].split(separator).map(h => h.trim().replace(/^["']|["']$/g, ''))
+
+  // Маппим заголовки
+  const headers = rawHeaders.map(h => columnMapping[h] || h)
   const results: Record<string, string>[] = []
 
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim())
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const values = line.split(separator).map(v => v.trim().replace(/^["']|["']$/g, ''))
     const row: Record<string, string> = {}
 
     headers.forEach((header, index) => {

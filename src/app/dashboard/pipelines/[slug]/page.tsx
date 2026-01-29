@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { Plus, ArrowLeft, Filter } from 'lucide-react'
+import { Plus, ArrowLeft, Filter, Upload, Download, X, FileSpreadsheet } from 'lucide-react'
 import {
   DndContext,
   DragEndEvent,
@@ -89,6 +89,9 @@ export default function PipelinePage() {
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -208,6 +211,60 @@ export default function PipelinePage() {
       .sort((a, b) => a.order - b.order)
   }
 
+  // Скачивание шаблона CSV для сделок
+  const downloadTemplate = () => {
+    const stagesList = pipeline?.stages.map(s => s.slug).join(' / ') || 'NEW'
+    const headers = 'Название,Сумма,Контакт (телефон),Этап,Описание'
+    const exampleRow = `Сделка с клиентом,100000,+79991234567,${pipeline?.stages[0]?.slug || 'NEW'},Описание сделки`
+    const csvContent = `${headers}\n${exampleRow}`
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'deals_template.csv'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  // Импорт сделок из файла
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !pipeline) return
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('pipelineId', pipeline.id)
+
+    setImporting(true)
+    try {
+      const res = await fetch('/api/deals/import', {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        alert(`Успешно импортировано: ${data.imported} сделок`)
+        setShowImportModal(false)
+        fetchDeals()
+      } else {
+        alert(`Ошибка: ${data.error}`)
+      }
+    } catch (error) {
+      console.error('Error importing deals:', error)
+      alert('Ошибка при импорте файла')
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   if (loading || !pipeline) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -238,13 +295,22 @@ export default function PipelinePage() {
           </div>
         </div>
 
-        <button
-          onClick={() => router.push('/dashboard/deals/new')}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Новая сделка</span>
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Upload className="w-5 h-5" />
+            <span>Импорт</span>
+          </button>
+          <button
+            onClick={() => router.push('/dashboard/deals/new')}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Новая сделка</span>
+          </button>
+        </div>
       </div>
 
       {/* Kanban Board */}
@@ -306,6 +372,78 @@ export default function PipelinePage() {
           )}
         </DragOverlay>
       </DndContext>
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Импорт сделок</h2>
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Загрузите файл CSV или Excel со сделками. Файл должен содержать 5 колонок: Название, Сумма, Контакт (телефон), Этап, Описание
+              </p>
+
+              {/* Кнопка скачивания шаблона */}
+              <button
+                onClick={downloadTemplate}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-xl font-medium hover:bg-green-100 transition"
+              >
+                <Download className="w-5 h-5" />
+                Скачать шаблон CSV
+              </button>
+
+              <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
+                <FileSpreadsheet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xls,.xlsx"
+                  onChange={handleFileImport}
+                  className="hidden"
+                  id="deals-file-upload"
+                />
+                <label
+                  htmlFor="deals-file-upload"
+                  className="cursor-pointer"
+                >
+                  <span className="text-indigo-600 font-medium hover:text-indigo-700">
+                    Выберите файл
+                  </span>
+                  <span className="text-gray-600"> или перетащите сюда</span>
+                </label>
+                <p className="text-xs text-gray-500 mt-2">CSV, XLS, XLSX до 10MB</p>
+              </div>
+
+              {importing && (
+                <div className="flex items-center justify-center gap-3 text-indigo-600">
+                  <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  <span>Импортируем сделки...</span>
+                </div>
+              )}
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p className="text-sm text-blue-800 font-medium mb-2">Формат файла:</p>
+                <pre className="text-xs text-blue-900 bg-white p-2 rounded overflow-x-auto">
+Название,Сумма,Контакт (телефон),Этап,Описание{'\n'}
+Сделка с клиентом,100000,+79991234567,{pipeline?.stages[0]?.slug || 'NEW'},Описание
+                </pre>
+                <p className="text-xs text-blue-700 mt-2">
+                  Доступные этапы: {pipeline?.stages.map(s => s.slug).join(', ')}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

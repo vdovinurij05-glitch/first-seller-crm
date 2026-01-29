@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Filter, Upload, X, UserPlus, FileSpreadsheet, Mail, Phone as PhoneIcon, MessageCircle } from 'lucide-react'
+import { Plus, Search, Filter, Upload, X, UserPlus, FileSpreadsheet, Mail, Phone as PhoneIcon, MessageCircle, Download } from 'lucide-react'
 
 interface Contact {
   id: string
@@ -126,6 +126,23 @@ export default function ContactsPage() {
 
   const handleContactClick = (contactId: string) => {
     router.push(`/dashboard/contacts/${contactId}`)
+  }
+
+  // Скачивание шаблона CSV
+  const downloadTemplate = () => {
+    const headers = 'Имя,Email,Телефон,Комментарий'
+    const exampleRow = 'Иван Иванов,ivan@mail.ru,+79991234567,Клиент из рекламы'
+    const csvContent = `${headers}\n${exampleRow}`
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'contacts_template.csv'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const handlePhoneClick = (e: React.MouseEvent, phone: string) => {
@@ -487,8 +504,17 @@ export default function ContactsPage() {
 
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                Загрузите файл CSV или XLS с контактами. Файл должен содержать колонки: name, phone, email, telegramUsername, status, notes
+                Загрузите файл CSV или Excel с контактами. Файл должен содержать 4 колонки: Имя, Email, Телефон, Комментарий
               </p>
+
+              {/* Кнопка скачивания шаблона */}
+              <button
+                onClick={downloadTemplate}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-xl font-medium hover:bg-green-100 transition"
+              >
+                <Download className="w-5 h-5" />
+                Скачать шаблон CSV
+              </button>
 
               <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
                 <FileSpreadsheet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -520,10 +546,10 @@ export default function ContactsPage() {
               )}
 
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <p className="text-sm text-blue-800 font-medium mb-2">Пример формата CSV:</p>
-                <pre className="text-xs text-blue-900 bg-white p-2 rounded">
-name,phone,email,telegramUsername,status,notes{'\n'}
-Иван Иванов,+79991234567,ivan@mail.ru,ivan_petrov,NEW,Клиент из рекламы
+                <p className="text-sm text-blue-800 font-medium mb-2">Формат файла:</p>
+                <pre className="text-xs text-blue-900 bg-white p-2 rounded overflow-x-auto">
+Имя,Email,Телефон,Комментарий{'\n'}
+Иван Иванов,ivan@mail.ru,+79991234567,Клиент из рекламы
                 </pre>
               </div>
             </div>
