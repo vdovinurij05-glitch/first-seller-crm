@@ -131,7 +131,7 @@ export default function ContactsPage() {
   // Скачивание шаблона CSV
   const downloadTemplate = () => {
     // Используем ; как разделитель для корректного открытия в Excel
-    const csvContent = 'Имя;Email;Телефон;Комментарий'
+    const csvContent = 'Имя;Email;Телефон;Telegram;Комментарий'
 
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -503,7 +503,7 @@ export default function ContactsPage() {
 
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                Загрузите файл CSV или Excel с контактами. Файл должен содержать 4 колонки: Имя, Email, Телефон, Комментарий
+                Загрузите файл CSV или Excel с контактами. Колонки: Имя, Email, Телефон, Telegram, Комментарий
               </p>
 
               {/* Кнопка скачивания шаблона */}
@@ -547,8 +547,8 @@ export default function ContactsPage() {
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <p className="text-sm text-blue-800 font-medium mb-2">Формат файла:</p>
                 <pre className="text-xs text-blue-900 bg-white p-2 rounded overflow-x-auto">
-Имя;Email;Телефон;Комментарий{'\n'}
-Иван Иванов;ivan@mail.ru;+79991234567;Клиент из рекламы
+Имя;Email;Телефон;Telegram;Комментарий{'\n'}
+Иван Иванов;ivan@mail.ru;+79991234567;ivanov_tg;Клиент из рекламы
                 </pre>
               </div>
             </div>
