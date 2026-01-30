@@ -20,7 +20,17 @@ const columnMapping: Record<string, string> = {
   'Notes': 'notes',
   'notes': 'notes',
   'Заметки': 'notes',
-  'заметки': 'notes'
+  'заметки': 'notes',
+  'Telegram': 'telegramUsername',
+  'telegram': 'telegramUsername',
+  'Телеграм': 'telegramUsername',
+  'телеграм': 'telegramUsername',
+  'TG': 'telegramUsername',
+  'tg': 'telegramUsername',
+  'Ник': 'telegramUsername',
+  'ник': 'telegramUsername',
+  'Username': 'telegramUsername',
+  'username': 'telegramUsername'
 }
 
 // Парсинг CSV
