@@ -424,28 +424,62 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
 
 // Обработка записи разговора
 export interface MangoRecordingEvent {
-  entry_id: string
-  call_id: string
-  recording_id: string
-  start: number
-  finish: number
+  entry_id?: string
+  call_id?: string
+  recording_id?: string
+  recording_url?: string
+  record_url?: string
+  url?: string
+  start?: number
+  finish?: number
 }
 
 export async function handleMangoRecording(event: MangoRecordingEvent): Promise<void> {
-  const { call_id, recording_id } = event
+  const { call_id, recording_id, entry_id } = event
+
+  console.log('🎙️ Processing recording event:', JSON.stringify(event))
 
   try {
-    // Получаем URL записи
-    const recordingUrl = await getCallRecording(recording_id)
+    // Получаем URL записи - сначала проверяем, есть ли URL напрямую в событии
+    let recordingUrl = event.recording_url || event.record_url || event.url
+
+    // Если URL нет, запрашиваем по recording_id
+    if (!recordingUrl && recording_id) {
+      recordingUrl = await getCallRecording(recording_id)
+    }
+
+    console.log(`🎙️ Recording URL: ${recordingUrl}`)
 
     if (recordingUrl) {
+      // Пытаемся найти звонок по разным идентификаторам
+      let call = null
+
+      // Сначала по mangoCallId
+      if (call_id) {
+        call = await prisma.call.findUnique({
+          where: { mangoCallId: call_id }
+        })
+      }
+
+      // Если не нашли, ищем по externalId (entry_id)
+      if (!call && entry_id) {
+        call = await prisma.call.findFirst({
+          where: { externalId: entry_id }
+        })
+      }
+
+      if (!call) {
+        console.log(`⚠️ Call not found for call_id=${call_id}, entry_id=${entry_id}`)
+        return
+      }
+
       // Обновляем звонок
-      const call = await prisma.call.update({
-        where: { mangoCallId: call_id },
+      await prisma.call.update({
+        where: { id: call.id },
         data: { recordingUrl }
       })
 
-      console.log(`✅ Recording URL saved for call ${call_id}`)
+      console.log(`✅ Recording URL saved for call ${call.id}`)
 
       // Если звонок связан со сделкой, обновляем системное событие
       if (call.dealId) {

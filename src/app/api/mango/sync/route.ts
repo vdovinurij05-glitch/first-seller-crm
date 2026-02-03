@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import crypto from 'crypto'
 import axios from 'axios'
+import fs from 'fs'
+import path from 'path'
 
 const MANGO_API_URL = 'https://app.mango-office.ru/vpbx'
 
@@ -55,34 +57,251 @@ async function mangoRequest(endpoint: string, data: object): Promise<any> {
   return response.data
 }
 
-// Получение URL записи разговора
-async function getRecordingUrl(recordingId: string): Promise<string | null> {
-  try {
-    console.log(`🎙️ Fetching recording URL for: ${recordingId}`)
+// Конфигурация Mango для построения URL записей
+const MANGO_ACCOUNT_ID = '400192121' // ID аккаунта из URL записи
+const MANGO_VPBX_ID = '400363906' // ID VPBX из SIP адреса
+const RECORDINGS_DIR = path.join(process.cwd(), 'public', 'recordings')
 
-    const response = await mangoRequest('/queries/recording/post/', {
-      recording_id: recordingId,
-      action: 'download' // или 'play' для стриминга
+// Создаём директорию для записей если её нет
+if (!fs.existsSync(RECORDINGS_DIR)) {
+  fs.mkdirSync(RECORDINGS_DIR, { recursive: true })
+}
+
+// Построение URL записи из recording_id (для скачивания)
+function buildRecordingUrl(recordingId: string): string {
+  return `https://lk.mango-office.ru/issa/api/${MANGO_ACCOUNT_ID}/${MANGO_VPBX_ID}/call-recording/play-record/${recordingId}`
+}
+
+// Скачивание и сохранение записи на сервер
+async function downloadAndSaveRecording(recordingId: string, entryId: string, rawRecordsValue?: string): Promise<string | null> {
+  try {
+    console.log(`🎙️ Downloading recording for entry ${entryId}, recordingId=${recordingId}, raw=${rawRecordsValue}`)
+
+    let downloadUrl: string | null = null
+
+    // Вариант 0: Специальный API recordings/post с call_id (entry_id)
+    try {
+      console.log(`🎙️ Trying /recordings/post/ with call_id: ${entryId}`)
+      const response = await mangoRequest('/recordings/post/', {
+        call_id: entryId,
+        action: 'download'
+      })
+      console.log(`🎙️ recordings/post response:`, JSON.stringify(response).substring(0, 500))
+      if (response?.url) {
+        downloadUrl = response.url
+        console.log(`✅ Got URL from /recordings/post/: ${downloadUrl}`)
+      }
+    } catch (e: any) {
+      console.log(`🎙️ /recordings/post/ failed: status=${e?.response?.status}, data=${JSON.stringify(e?.response?.data).substring(0, 200)}`)
+    }
+
+    // Вариант 0.5: Пробуем /queries/recording/ с entry_id как recording_id
+    if (!downloadUrl) {
+      try {
+        console.log(`🎙️ Trying /queries/recording/ with entry_id: ${entryId}`)
+        const response = await mangoRequest('/queries/recording/', {
+          recording_id: entryId,
+          action: 'download'
+        })
+        console.log(`🎙️ /queries/recording/ response:`, JSON.stringify(response).substring(0, 500))
+        if (response?.url) {
+          downloadUrl = response.url
+          console.log(`✅ Got URL from /queries/recording/: ${downloadUrl}`)
+        }
+      } catch (e: any) {
+        console.log(`🎙️ /queries/recording/ failed: status=${e?.response?.status}`)
+      }
+    }
+
+    // Массив вариантов recording_id для попыток с /queries/recording/post/
+    const recordingIdVariants = [
+      recordingId,           // Декодированный recording_id из base64
+      entryId,               // entry_id напрямую
+      rawRecordsValue,       // Сырое base64 значение
+    ].filter(Boolean) as string[]
+
+    // Пробуем каждый вариант recording_id
+    for (const tryRecordingId of recordingIdVariants) {
+      if (downloadUrl) break
+
+      console.log(`🎙️ Trying recording_id: ${tryRecordingId}`)
+
+      // Вариант 1: API с action=download
+      try {
+        const response = await mangoRequest('/queries/recording/post/', {
+          recording_id: tryRecordingId,
+          action: 'download'
+        })
+        console.log(`🎙️ Download API response for ${tryRecordingId}:`, JSON.stringify(response).substring(0, 500))
+        if (response?.url) {
+          downloadUrl = response.url
+          console.log(`✅ Got download URL from API: ${downloadUrl}`)
+          break
+        }
+      } catch (e: any) {
+        console.log(`🎙️ Download API failed for ${tryRecordingId}: status=${e?.response?.status}, data=${JSON.stringify(e?.response?.data).substring(0, 200)}`)
+      }
+
+      // Вариант 2: API с action=play
+      if (!downloadUrl) {
+        try {
+          const response = await mangoRequest('/queries/recording/post/', {
+            recording_id: tryRecordingId,
+            action: 'play'
+          })
+          console.log(`🎙️ Play API response for ${tryRecordingId}:`, JSON.stringify(response).substring(0, 500))
+          if (response?.url) {
+            downloadUrl = response.url
+            console.log(`✅ Got play URL from API: ${downloadUrl}`)
+            break
+          }
+        } catch (e: any) {
+          console.log(`🎙️ Play API failed for ${tryRecordingId}: status=${e?.response?.status}`)
+        }
+      }
+
+      // Небольшая пауза между попытками чтобы не получить rate limit
+      await new Promise(resolve => setTimeout(resolve, 300))
+    }
+
+    // Вариант 3: Пробуем прямой URL (только если API не вернул ничего)
+    if (!downloadUrl) {
+      // Пробуем с каждым вариантом recording_id
+      for (const tryRecordingId of recordingIdVariants) {
+        const directUrl = `https://app.mango-office.ru/vpbx/queries/recording/link/${config.apiKey}/${tryRecordingId}`
+        console.log(`🎙️ Trying direct URL: ${directUrl}`)
+
+        try {
+          const testResponse = await axios.head(directUrl, {
+            timeout: 10000,
+            validateStatus: () => true
+          })
+          if (testResponse.status === 200) {
+            downloadUrl = directUrl
+            console.log(`✅ Direct URL works: ${downloadUrl}`)
+            break
+          } else {
+            console.log(`🎙️ Direct URL returned ${testResponse.status}`)
+          }
+        } catch (e: any) {
+          console.log(`🎙️ Direct URL check failed: ${e?.message}`)
+        }
+      }
+    }
+
+    if (!downloadUrl) {
+      console.log(`⚠️ No valid download URL found for entry ${entryId}`)
+      return null
+    }
+
+    console.log(`🎙️ Final download URL: ${downloadUrl}`)
+
+    // Скачиваем файл
+    const audioResponse = await axios.get(downloadUrl, {
+      responseType: 'arraybuffer',
+      timeout: 60000,
+      validateStatus: (status) => status < 500
     })
 
-    console.log('🎙️ Recording response:', response)
-
-    // Mango возвращает URL напрямую или в поле url
-    if (typeof response === 'string' && response.startsWith('http')) {
-      return response
+    if (audioResponse.status !== 200) {
+      console.log(`⚠️ Download returned status ${audioResponse.status}`)
+      return null
     }
-    if (response?.url) {
-      return response.url
+
+    // Проверяем размер файла
+    const fileSize = audioResponse.data.length
+    console.log(`🎙️ Downloaded ${fileSize} bytes`)
+
+    if (fileSize < 1000) {
+      console.log(`⚠️ File too small (${fileSize} bytes), likely an error response`)
+      return null
+    }
+
+    // Определяем расширение файла
+    const contentType = audioResponse.headers['content-type'] || 'audio/mpeg'
+    const ext = contentType.includes('wav') ? 'wav' : 'mp3'
+
+    // Генерируем имя файла
+    const filename = `${entryId.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`
+    const filepath = path.join(RECORDINGS_DIR, filename)
+
+    // Сохраняем файл
+    fs.writeFileSync(filepath, audioResponse.data)
+
+    console.log(`✅ Recording saved to: ${filepath} (${fileSize} bytes)`)
+
+    // Возвращаем публичный URL
+    return `/recordings/${filename}`
+  } catch (error: any) {
+    console.error(`❌ Error downloading recording for ${entryId}:`, error?.message || error)
+    return null
+  }
+}
+
+// Извлечение recording_id из поля records
+function extractRecordingId(recordsField: string): string | null {
+  try {
+    // Убираем скобки если есть: [value] -> value
+    let value = recordsField.trim()
+    if (value.startsWith('[') && value.endsWith(']')) {
+      value = value.slice(1, -1)
+    }
+
+    // Декодируем base64: MToxMDI0MjQyNzoyNTg2MzI1NzAxODow -> 1:10242427:25863257018:0
+    const decoded = Buffer.from(value, 'base64').toString('utf-8')
+    console.log(`🎙️ Decoded records field: ${decoded}`)
+
+    // Формат: type:recording_id:entry_id:flag
+    const parts = decoded.split(':')
+    if (parts.length >= 2) {
+      const recordingId = parts[1] // Второй элемент - recording_id
+      console.log(`🎙️ Extracted recording_id: ${recordingId}`)
+      return recordingId
     }
 
     return null
-  } catch (error: any) {
-    // Код 4102 = запись не найдена (нормальная ситуация для коротких/пропущенных звонков)
-    if (error?.response?.data?.code === 4102 || error?.response?.status === 404) {
-      console.log(`⚠️ No recording available for: ${recordingId}`)
-      return null
+  } catch (e) {
+    console.log(`🎙️ Failed to decode records field: ${recordsField}`, e)
+    return null
+  }
+}
+
+// Получение URL записи разговора (скачивает и сохраняет на сервер)
+async function getRecordingUrl(entryId: string, recordsField?: string): Promise<string | null> {
+  try {
+    console.log(`🎙️ Fetching recording URL for entry: ${entryId}, records: ${recordsField}`)
+
+    // Подготавливаем сырое значение records (без скобок)
+    let rawRecordsValue: string | undefined
+    if (recordsField && recordsField !== '' && recordsField !== '0') {
+      rawRecordsValue = recordsField.trim()
+      if (rawRecordsValue.startsWith('[') && rawRecordsValue.endsWith(']')) {
+        rawRecordsValue = rawRecordsValue.slice(1, -1)
+      }
     }
-    console.error(`❌ Error fetching recording for ${recordingId}:`, error?.message || error)
+
+    // Извлекаем recording_id из поля records
+    let recordingId: string | null = null
+    if (recordsField && recordsField !== '' && recordsField !== '0') {
+      recordingId = extractRecordingId(recordsField)
+    }
+
+    // Если нет ни recordingId ни rawRecordsValue - пробуем использовать только entryId
+    if (!recordingId && !rawRecordsValue) {
+      console.log(`⚠️ No records field, trying with entry_id only: ${entryId}`)
+      // Всё равно пробуем - вдруг entry_id работает как recording_id
+    }
+
+    // Скачиваем и сохраняем запись на наш сервер
+    const localUrl = await downloadAndSaveRecording(recordingId || entryId, entryId, rawRecordsValue)
+    if (localUrl) {
+      return localUrl
+    }
+
+    console.log(`⚠️ No recording available for: ${entryId}`)
+    return null
+  } catch (error: any) {
+    console.error(`❌ Error fetching recording for ${entryId}:`, error?.message || error)
     return null
   }
 }
@@ -97,7 +316,7 @@ async function getRecentCalls(minutes: number = 60): Promise<any> {
   const requestData = {
     date_from: Math.floor(dateFrom.getTime() / 1000),
     date_to: Math.floor(dateTo.getTime() / 1000),
-    fields: 'start,finish,from_number,to_number,disconnect_reason,entry_id'
+    fields: 'records,start,finish,from_number,to_number,disconnect_reason,entry_id'
   }
 
   console.log('🔵 Mango API request to /stats/request:', requestData)
@@ -139,7 +358,7 @@ async function getRecentCalls(minutes: number = 60): Promise<any> {
       }
 
       // Фиксированные имена полей для Mango CSV (без заголовков)
-      const fieldNames = ['start', 'finish', 'from_number', 'to_number', 'disconnect_reason', 'entry_id']
+      const fieldNames = ['records', 'start', 'finish', 'from_number', 'to_number', 'disconnect_reason', 'entry_id']
 
       const calls = lines.map(line => {
         const values = line.split(';')
@@ -315,8 +534,9 @@ async function syncCalls(calls: any[]): Promise<number> {
 
       // Получаем URL записи (только для завершённых звонков с длительностью > 0)
       let recordingUrl: string | null = null
+      const recordsField = mangoCall.records
       if (status === 'COMPLETED' && duration > 0) {
-        recordingUrl = await getRecordingUrl(entryId)
+        recordingUrl = await getRecordingUrl(entryId, recordsField)
         if (recordingUrl) {
           console.log(`🎙️ Got recording URL for ${entryId}`)
         }
@@ -378,16 +598,55 @@ async function syncCalls(calls: any[]): Promise<number> {
   return syncedCount
 }
 
+// Обновление записей для существующих звонков без URL записи
+async function updateMissingRecordings(): Promise<number> {
+  console.log('🎙️ Updating missing recordings for existing calls...')
+
+  const callsWithoutRecordings = await prisma.call.findMany({
+    where: {
+      recordingUrl: null,
+      status: 'COMPLETED',
+      duration: { gt: 0 }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20 // Ограничиваем количество за раз
+  })
+
+  console.log(`🎙️ Found ${callsWithoutRecordings.length} calls without recordings`)
+
+  let updatedCount = 0
+  for (const call of callsWithoutRecordings) {
+    if (!call.externalId) continue
+
+    const recordingUrl = await getRecordingUrl(call.externalId)
+    if (recordingUrl) {
+      await prisma.call.update({
+        where: { id: call.id },
+        data: { recordingUrl }
+      })
+      console.log(`🎙️ Updated recording for call ${call.id}`)
+      updatedCount++
+    }
+  }
+
+  return updatedCount
+}
+
 async function performSync() {
   console.log('🚀 Mango sync v2.0 - with phone normalization')
+
+  // Сначала обновляем записи для существующих звонков
+  const recordingsUpdated = await updateMissingRecordings()
+
   // Получаем звонки за последний час
   const calls = await getRecentCalls(60)
 
   if (!calls || calls.length === 0) {
     return {
       success: true,
-      message: 'No new calls to sync',
-      synced: 0
+      message: recordingsUpdated > 0 ? `Updated ${recordingsUpdated} recordings` : 'No new calls to sync',
+      synced: 0,
+      recordingsUpdated
     }
   }
 
@@ -396,8 +655,9 @@ async function performSync() {
 
   return {
     success: true,
-    message: `Synced ${syncedCount} calls`,
+    message: `Synced ${syncedCount} calls, updated ${recordingsUpdated} recordings`,
     synced: syncedCount,
+    recordingsUpdated,
     total: calls.length
   }
 }

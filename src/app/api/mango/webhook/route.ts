@@ -19,6 +19,9 @@ export async function POST(request: NextRequest) {
     const json = formData.get('json') as string
     const sign = formData.get('sign') as string
 
+    console.log('📥 Mango webhook received')
+    console.log('📥 Raw JSON:', json)
+
     // Проверяем подпись
     if (!verifyMangoSignature(json, sign)) {
       console.error('Invalid Mango signature')
@@ -26,14 +29,19 @@ export async function POST(request: NextRequest) {
     }
 
     const event = JSON.parse(json)
+    console.log('📥 Parsed event:', JSON.stringify(event, null, 2))
 
     // Определяем тип события
     if (event.call_state) {
       // Событие звонка
+      console.log('📞 Call event, state:', event.call_state)
       await handleMangoWebhook(event as MangoCallEvent)
-    } else if (event.recording_id) {
+    } else if (event.recording_id || event.recording_url || event.record_url) {
       // Событие записи
+      console.log('🎙️ Recording event detected')
       await handleMangoRecording(event as MangoRecordingEvent)
+    } else {
+      console.log('❓ Unknown event type')
     }
 
     return NextResponse.json({ ok: true })
