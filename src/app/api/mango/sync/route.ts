@@ -166,31 +166,42 @@ async function syncCalls(calls: any[]): Promise<number> {
         continue
       }
 
-      // Нормализуем номера для поиска
-      const normalizedFrom = normalizePhone(fromNumber)
-      const normalizedTo = normalizePhone(toNumber)
+      // Определяем направление по наличию SIP-адреса
+      // Если from_number содержит "sip:" - это исходящий звонок (звоним из Mango)
+      // Если to_number содержит "sip:" - это входящий звонок (звонят нам)
+      const fromIsSip = fromNumber.includes('sip:') || fromNumber.includes('@')
+      const toIsSip = toNumber.includes('sip:') || toNumber.includes('@')
+
+      // Исходящий если from = SIP (наш внутренний номер)
+      const isOutgoing = fromIsSip && !toIsSip
+
+      // Определяем номер клиента (внешний номер, не SIP)
+      const clientPhone = isOutgoing ? toNumber : fromNumber
+
+      console.log(`📞 Call direction: ${isOutgoing ? 'OUTGOING' : 'INCOMING'}, client: ${clientPhone}`)
+
+      // Нормализуем номер клиента для поиска
+      const normalizedClient = normalizePhone(clientPhone)
 
       // Создаём варианты номеров для поиска (с разными префиксами)
       const phoneVariants = [
-        fromNumber, toNumber,
-        normalizedFrom, normalizedTo,
-        `7${normalizedFrom}`, `7${normalizedTo}`,
-        `8${normalizedFrom}`, `8${normalizedTo}`,
-        `+7${normalizedFrom}`, `+7${normalizedTo}`
+        clientPhone,
+        normalizedClient,
+        `7${normalizedClient}`,
+        `8${normalizedClient}`,
+        `+7${normalizedClient}`
       ].filter(Boolean)
 
-      console.log(`🔍 Searching contact with phones:`, phoneVariants.slice(0, 4))
+      console.log(`🔍 Searching contact with phones:`, phoneVariants)
 
-      // Ищем контакт по номеру (входящий или исходящий) с разными форматами
+      // Ищем контакт по номеру клиента
       const contact = await prisma.contact.findFirst({
         where: {
           OR: phoneVariants.map(phone => ({ phone }))
         }
       })
 
-      // Определяем направление (сравниваем нормализованные номера)
-      const contactNormalized = contact?.phone ? normalizePhone(contact.phone) : ''
-      const isIncoming = contact ? (contactNormalized === normalizedFrom) : true
+      const isIncoming = !isOutgoing
 
       // Определяем статус
       let status = 'COMPLETED'
@@ -205,8 +216,10 @@ async function syncCalls(calls: any[]): Promise<number> {
         duration = finishTime - startTime
       }
 
-      // Находим активную сделку для контакта
+      // Находим или создаём контакт и сделку
       let dealId = null
+      let contactId = contact?.id
+
       if (contact) {
         console.log(`✅ Found contact: ${contact.name} (${contact.phone})`)
         const activeDeal = await prisma.deal.findFirst({
@@ -225,7 +238,34 @@ async function syncCalls(calls: any[]): Promise<number> {
           console.log(`⚠️ No active deal found for contact ${contact.name}`)
         }
       } else {
-        console.log(`⚠️ No contact found for phones: ${fromNumber} / ${toNumber}`)
+        // Контакт не найден - создаём новый контакт и сделку
+        console.log(`📝 Creating new contact for phone: ${clientPhone}`)
+
+        const callType = isIncoming ? 'Входящий' : 'Исходящий'
+        const newContact = await prisma.contact.create({
+          data: {
+            name: `Звонок: ${clientPhone}`,
+            phone: clientPhone,
+            source: 'PHONE',
+            status: 'NEW'
+          }
+        })
+        contactId = newContact.id
+
+        // Создаем сделку для нового контакта
+        const newDeal = await prisma.deal.create({
+          data: {
+            title: `${callType} звонок: ${clientPhone}`,
+            amount: 0,
+            stage: 'NEW',
+            probability: 50,
+            description: `Автоматически создана при ${isIncoming ? 'входящем' : 'исходящем'} звонке\nНомер: ${clientPhone}\nДата звонка: ${new Date(typeof start === 'number' ? start * 1000 : parseInt(start) * 1000).toLocaleString('ru-RU')}`,
+            contactId: newContact.id
+          }
+        })
+        dealId = newDeal.id
+
+        console.log(`✅ Created new contact ${newContact.id} and deal ${newDeal.id}`)
       }
 
       // Создаем запись звонка
@@ -233,6 +273,7 @@ async function syncCalls(calls: any[]): Promise<number> {
         data: {
           externalId: entryId,
           direction: isIncoming ? 'IN' : 'OUT',
+          phone: clientPhone, // Номер клиента
           fromNumber,
           toNumber,
           status,
@@ -240,7 +281,7 @@ async function syncCalls(calls: any[]): Promise<number> {
           endTime: finish ? new Date(typeof finish === 'number' ? finish * 1000 : parseInt(finish) * 1000) : new Date(),
           duration,
           result: disconnectReason ? String(disconnectReason) : 'completed',
-          contactId: contact?.id,
+          contactId,
           dealId
         }
       })
