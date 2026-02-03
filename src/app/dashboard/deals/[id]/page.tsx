@@ -25,7 +25,9 @@ import {
   Bell,
   Phone,
   Clock,
-  Check
+  Check,
+  Search,
+  ChevronDown
 } from 'lucide-react'
 import TaskModal from '@/components/tasks/TaskModal'
 
@@ -138,6 +140,10 @@ export default function DealDetailPage() {
     managerId: ''
   })
 
+  const [contactSearch, setContactSearch] = useState('')
+  const [contactDropdownOpen, setContactDropdownOpen] = useState(false)
+  const contactDropdownRef = useRef<HTMLDivElement>(null)
+
   const stages = [
     { id: 'NEW', name: 'Новые' },
     { id: 'CONTACTED', name: 'Контакт' },
@@ -177,6 +183,17 @@ export default function DealDetailPage() {
   useEffect(() => {
     scrollToBottom()
   }, [messages, comments])
+
+  // Закрытие dropdown при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contactDropdownRef.current && !contactDropdownRef.current.contains(event.target as Node)) {
+        setContactDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -653,16 +670,93 @@ export default function DealDetailPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Контакт
                 </label>
-                <select
-                  value={editData.contactId}
-                  onChange={(e) => setEditData({ ...editData, contactId: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="">Не выбран</option>
-                  {contacts.map(contact => (
-                    <option key={contact.id} value={contact.id}>{contact.name}</option>
-                  ))}
-                </select>
+                <div ref={contactDropdownRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setContactDropdownOpen(!contactDropdownOpen)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-left flex items-center justify-between"
+                  >
+                    <span className={editData.contactId ? 'text-gray-900' : 'text-gray-500'}>
+                      {editData.contactId
+                        ? contacts.find(c => c.id === editData.contactId)?.name || 'Не выбран'
+                        : 'Не выбран'}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${contactDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {contactDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-64 overflow-hidden">
+                      <div className="p-2 border-b border-gray-200">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input
+                            type="text"
+                            value={contactSearch}
+                            onChange={(e) => setContactSearch(e.target.value)}
+                            placeholder="Поиск контакта..."
+                            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditData({ ...editData, contactId: '' })
+                            setContactDropdownOpen(false)
+                            setContactSearch('')
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50"
+                        >
+                          Не выбран
+                        </button>
+                        {contacts
+                          .filter(contact =>
+                            contact.name?.toLowerCase().includes(contactSearch.toLowerCase()) ||
+                            contact.phone?.includes(contactSearch) ||
+                            contact.telegramUsername?.toLowerCase().includes(contactSearch.toLowerCase())
+                          )
+                          .map(contact => (
+                            <button
+                              key={contact.id}
+                              type="button"
+                              onClick={() => {
+                                setEditData({ ...editData, contactId: contact.id })
+                                setContactDropdownOpen(false)
+                                setContactSearch('')
+                              }}
+                              className={`w-full px-4 py-2 text-left text-sm hover:bg-indigo-50 flex items-center justify-between ${
+                                editData.contactId === contact.id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-900'
+                              }`}
+                            >
+                              <div>
+                                <div className="font-medium">{contact.name}</div>
+                                {(contact.phone || contact.telegramUsername) && (
+                                  <div className="text-xs text-gray-500">
+                                    {contact.phone}{contact.phone && contact.telegramUsername && ' • '}
+                                    {contact.telegramUsername && `@${contact.telegramUsername}`}
+                                  </div>
+                                )}
+                              </div>
+                              {editData.contactId === contact.id && (
+                                <Check className="w-4 h-4 text-indigo-600" />
+                              )}
+                            </button>
+                          ))}
+                        {contacts.filter(contact =>
+                          contact.name?.toLowerCase().includes(contactSearch.toLowerCase()) ||
+                          contact.phone?.includes(contactSearch) ||
+                          contact.telegramUsername?.toLowerCase().includes(contactSearch.toLowerCase())
+                        ).length === 0 && (
+                          <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                            Ничего не найдено
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
