@@ -2,21 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, TrendingUp, Users, Calendar, Search, Settings, Trash2, X } from 'lucide-react'
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  rectIntersection,
-  useDroppable
-} from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import DealCard from '@/components/deals/DealCard'
-import DraggableDealCard from '@/components/deals/DraggableDealCard'
+import { Plus, Search, Filter, TrendingUp, Calendar, User, Phone } from 'lucide-react'
+
+interface Pipeline {
+  id: string
+  name: string
+  slug: string
+}
 
 interface Deal {
   id: string
@@ -24,72 +16,31 @@ interface Deal {
   amount: number
   stage: string
   probability: number
-  order: number
+  createdAt: string
+  pipeline?: Pipeline
   contact?: {
     id: string
     name: string
     phone?: string
+    telegramUsername?: string
   }
   manager?: {
     id: string
     name: string
   }
-  createdAt: string
-}
-
-interface Stage {
-  id: string
-  name: string
-  color: string
-  order: number
-  isDefault: boolean
-}
-
-function DroppableColumn({
-  id,
-  children,
-  stage
-}: {
-  id: string
-  children: React.ReactNode
-  stage: { id: string; name: string; color: string }
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id })
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex-shrink-0 w-80 bg-gray-50 rounded-2xl p-4 transition-colors ${
-        isOver ? 'bg-indigo-50 ring-2 ring-indigo-300' : ''
-      }`}
-    >
-      {children}
-    </div>
-  )
 }
 
 export default function DealsPage() {
   const router = useRouter()
   const [deals, setDeals] = useState<Deal[]>([])
-  const [stages, setStages] = useState<Stage[]>([])
+  const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
-  const [showStagesModal, setShowStagesModal] = useState(false)
-  const [newStageName, setNewStageName] = useState('')
-  const [newStageColor, setNewStageColor] = useState('bg-gray-500')
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8
-      }
-    })
-  )
+  const [pipelineFilter, setPipelineFilter] = useState<string>('all')
 
   useEffect(() => {
     fetchDeals()
-    fetchStages()
+    fetchPipelines()
   }, [])
 
   const fetchDeals = async () => {
@@ -105,205 +56,77 @@ export default function DealsPage() {
     }
   }
 
-  const fetchStages = async () => {
+  const fetchPipelines = async () => {
     try {
-      const res = await fetch('/api/stages')
+      const res = await fetch('/api/pipelines')
       const data = await res.json()
-      setStages(data.stages || [])
+      setPipelines(data.pipelines || [])
     } catch (error) {
-      console.error('Error fetching stages:', error)
+      console.error('Error fetching pipelines:', error)
     }
   }
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const deal = deals.find(d => d.id === event.active.id)
-    setActiveDeal(deal || null)
+  const handleDealClick = (dealId: string) => {
+    router.push(`/dashboard/deals/${dealId}`)
   }
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
-    setActiveDeal(null)
+  const filteredDeals = deals.filter(deal => {
+    const matchesSearch =
+      deal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      deal.contact?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      deal.contact?.phone?.includes(searchQuery)
 
-    if (!over) return
+    const matchesPipeline = pipelineFilter === 'all' || deal.pipeline?.id === pipelineFilter
 
-    const dealId = active.id as string
-    const deal = deals.find(d => d.id === dealId)
-    if (!deal) return
+    return matchesSearch && matchesPipeline
+  })
 
-    // Определяем целевой stage
-    let newStage = over.id as string
-    const overDeal = deals.find(d => d.id === over.id)
-    if (overDeal) {
-      newStage = overDeal.stage
-    }
+  const totalAmount = filteredDeals.reduce((sum, deal) => sum + deal.amount, 0)
 
-    // Проверяем, что newStage - это валидный этап
-    const isValidStage = stages.some(s => s.id === newStage)
-    if (!isValidStage) return
-
-    const isSameStage = deal.stage === newStage
-
-    // Если перемещаем в том же столбце
-    if (isSameStage && overDeal && dealId !== overDeal.id) {
-      console.log('Reordering within same stage')
-
-      const stageDeals = deals.filter(d => d.stage === newStage).sort((a, b) => a.order - b.order)
-      const oldIndex = stageDeals.findIndex(d => d.id === dealId)
-      const newIndex = stageDeals.findIndex(d => d.id === overDeal.id)
-
-      if (oldIndex === newIndex) return
-
-      // Создаем новый массив с переставленными элементами
-      const reorderedDeals = [...stageDeals]
-      const [movedDeal] = reorderedDeals.splice(oldIndex, 1)
-      reorderedDeals.splice(newIndex, 0, movedDeal)
-
-      // Пересчитываем order для всех сделок в этом stage
-      const updatedDeals = reorderedDeals.map((d, idx) => ({ ...d, order: idx }))
-
-      // Оптимистичное обновление UI
-      setDeals(prevDeals => {
-        const otherDeals = prevDeals.filter(d => d.stage !== newStage)
-        return [...otherDeals, ...updatedDeals]
-      })
-
-      // Обновляем на сервере
-      try {
-        await Promise.all(
-          updatedDeals.map(d =>
-            fetch(`/api/deals/${d.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order: d.order })
-            })
-          )
-        )
-        console.log('Deals reordered successfully')
-      } catch (error) {
-        console.error('Error reordering deals:', error)
-        await fetchDeals()
-      }
-    }
-    // Если перемещаем в другой столбец
-    else if (!isSameStage) {
-      console.log('Moving deal', dealId, 'from', deal.stage, 'to stage', newStage)
-
-      // Найдем максимальный order в целевом stage
-      const targetStageDeals = deals.filter(d => d.stage === newStage)
-      const maxOrder = targetStageDeals.length > 0
-        ? Math.max(...targetStageDeals.map(d => d.order))
-        : -1
-
-      // Оптимистичное обновление UI
-      setDeals(prevDeals =>
-        prevDeals.map(d =>
-          d.id === dealId ? { ...d, stage: newStage, order: maxOrder + 1 } : d
-        )
-      )
-
-      // Обновляем на сервере
-      try {
-        const res = await fetch(`/api/deals/${dealId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stage: newStage, order: maxOrder + 1 })
-        })
-
-        if (!res.ok) {
-          console.error('Failed to update deal on server')
-          await fetchDeals()
-        } else {
-          console.log('Deal updated successfully')
-        }
-      } catch (error) {
-        console.error('Error updating deal:', error)
-        await fetchDeals()
-      }
-    }
-  }
-
-  const handleAddStage = async () => {
-    if (!newStageName.trim()) return
-
-    try {
-      const id = newStageName.toUpperCase().replace(/\s+/g, '_')
-
-      const res = await fetch('/api/stages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id,
-          name: newStageName,
-          color: newStageColor
-        })
-      })
-
-      if (res.ok) {
-        setNewStageName('')
-        setNewStageColor('bg-gray-500')
-        await fetchStages()
-      } else {
-        alert('Ошибка при создании статуса')
-      }
-    } catch (error) {
-      console.error('Error creating stage:', error)
-      alert('Ошибка при создании статуса')
-    }
-  }
-
-  const handleDeleteStage = async (stageId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить этот статус?')) return
-
-    try {
-      const res = await fetch(`/api/stages/${stageId}`, {
-        method: 'DELETE'
-      })
-
-      if (res.ok) {
-        await fetchStages()
-      } else {
-        const data = await res.json()
-        alert(data.error || 'Ошибка при удалении статуса')
-      }
-    } catch (error) {
-      console.error('Error deleting stage:', error)
-      alert('Ошибка при удалении статуса')
-    }
-  }
-
-  const getDealsByStage = (stageId: string) => {
-    return deals
-      .filter(deal =>
-        deal.stage === stageId &&
-        (searchQuery === '' ||
-          deal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          deal.contact?.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-      .sort((a, b) => a.order - b.order)
-  }
-
-  const calculateStats = () => {
-    const totalDeals = deals.length
-    const totalAmount = deals.reduce((sum, deal) => sum + deal.amount, 0)
-    const wonDeals = deals.filter(d => d.stage === 'WON').length
-    const thisMonthDeals = deals.filter(d => {
-      const dealDate = new Date(d.createdAt)
-      const now = new Date()
-      return dealDate.getMonth() === now.getMonth() &&
-        dealDate.getFullYear() === now.getFullYear()
-    }).length
-
-    return { totalDeals, totalAmount, wonDeals, thisMonthDeals }
-  }
-
-  const stats = calculateStats()
-
-  const formatCurrency = (amount: number) => {
+  const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('ru-RU', {
       style: 'currency',
       currency: 'RUB',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount)
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })
+  }
+
+  const getStageColor = (stage: string) => {
+    const colors: Record<string, string> = {
+      'NEW': 'bg-blue-100 text-blue-700',
+      'CONTACTED': 'bg-purple-100 text-purple-700',
+      'MEETING': 'bg-yellow-100 text-yellow-700',
+      'NEGOTIATION': 'bg-orange-100 text-orange-700',
+      'WON': 'bg-green-100 text-green-700',
+      'LOST': 'bg-red-100 text-red-700',
+      'PL_CONNECTED': 'bg-emerald-100 text-emerald-700',
+      'STORE_LAUNCHED': 'bg-teal-100 text-teal-700',
+    }
+    return colors[stage] || 'bg-gray-100 text-gray-700'
+  }
+
+  const getStageName = (stage: string) => {
+    const names: Record<string, string> = {
+      'NEW': 'Новые',
+      'CONTACTED': 'Контакт',
+      'MEETING': 'Встреча',
+      'NEGOTIATION': 'Переговоры',
+      'PROPOSAL': 'Предложение',
+      'WON': 'Выиграно',
+      'LOST': 'Проиграно',
+      'PL_CONNECTED': 'ПЛ подключена',
+      'STORE_LAUNCHED': 'Магазин запущен',
+    }
+    return names[stage] || stage
   }
 
   return (
@@ -311,236 +134,200 @@ export default function DealsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Сделки</h1>
-          <p className="text-gray-500 mt-1">Управление воронкой продаж</p>
+          <h1 className="text-2xl font-bold text-gray-900">Все сделки</h1>
+          <p className="text-gray-500 mt-1">
+            {filteredDeals.length} сделок на сумму {formatAmount(totalAmount)}
+          </p>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowStagesModal(true)}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition flex items-center gap-2"
-          >
-            <Settings className="w-5 h-5" />
-            Настроить статусы
-          </button>
-          <button
-            onClick={() => router.push('/dashboard/deals/new')}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition flex items-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            Создать сделку
-          </button>
-        </div>
+        <button
+          onClick={() => router.push('/dashboard/deals/new')}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition flex items-center gap-2"
+        >
+          <Plus className="w-5 h-5" />
+          Новая сделка
+        </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-            </div>
-            <span className="text-sm font-medium text-gray-600">Всего сделок</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.totalDeals}</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-green-600" />
-            </div>
-            <span className="text-sm font-medium text-gray-600">Сумма сделок</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalAmount)}</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Calendar className="w-5 h-5 text-purple-600" />
-            </div>
-            <span className="text-sm font-medium text-gray-600">В этом месяце</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.thisMonthDeals}</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <Users className="w-5 h-5 text-orange-600" />
-            </div>
-            <span className="text-sm font-medium text-gray-600">Выиграно</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.wonDeals}</p>
-        </div>
-      </div>
-
-      {/* Search */}
+      {/* Filters */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Поиск сделок..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Search */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Поиск по названию, контакту, телефону..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Pipeline Filter */}
+          <div className="flex gap-2 overflow-x-auto">
+            <button
+              onClick={() => setPipelineFilter('all')}
+              className={`px-4 py-2 rounded-xl font-medium transition whitespace-nowrap ${
+                pipelineFilter === 'all'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Все воронки
+            </button>
+            {pipelines.map((pipeline) => (
+              <button
+                key={pipeline.id}
+                onClick={() => setPipelineFilter(pipeline.id)}
+                className={`px-4 py-2 rounded-xl font-medium transition whitespace-nowrap ${
+                  pipelineFilter === pipeline.id
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {pipeline.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Kanban Board */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={rectIntersection}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="overflow-x-auto pb-4">
-          <div className="inline-flex gap-4 min-w-full">
-            {stages.map((stage) => {
-              const stageDeals = getDealsByStage(stage.id)
-
-              return (
-                <DroppableColumn key={stage.id} id={stage.id} stage={stage}>
-                  {/* Column Header */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${stage.color}`} />
-                      <h3 className="font-semibold text-gray-900">{stage.name}</h3>
-                      <span className="text-sm text-gray-500 bg-white px-2 py-0.5 rounded-full">
-                        {stageDeals.length}
+      {/* Deals Table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Сделка
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Контакт
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Воронка
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Статус
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Сумма
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Дата
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                    Загрузка...
+                  </td>
+                </tr>
+              ) : filteredDeals.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                    Сделки не найдены
+                  </td>
+                </tr>
+              ) : (
+                filteredDeals.map((deal) => (
+                  <tr
+                    key={deal.id}
+                    onClick={() => handleDealClick(deal.id)}
+                    className="hover:bg-gray-50 transition cursor-pointer"
+                  >
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="font-medium text-gray-900">{deal.title}</p>
+                        {deal.manager && (
+                          <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                            <User className="w-3 h-3" />
+                            {deal.manager.name}
+                          </p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {deal.contact ? (
+                        <div>
+                          <p className="font-medium text-gray-900">{deal.contact.name}</p>
+                          {deal.contact.phone && (
+                            <a
+                              href={`tel:${deal.contact.phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                            >
+                              <Phone className="w-3 h-3" />
+                              {deal.contact.phone}
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {deal.pipeline ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-indigo-50 text-indigo-700">
+                          <Filter className="w-3 h-3" />
+                          {deal.pipeline.name}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStageColor(deal.stage)}`}>
+                        {getStageName(deal.stage)}
                       </span>
-                    </div>
-                  </div>
-
-                  {/* Deals in this column */}
-                  <SortableContext
-                    items={stageDeals.map(d => d.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="space-y-3 min-h-[200px]">
-                      {stageDeals.map((deal) => (
-                        <DraggableDealCard
-                          key={deal.id}
-                          deal={deal}
-                          onClick={() => router.push(`/dashboard/deals/${deal.id}`)}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DroppableColumn>
-              )
-            })}
-          </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-medium text-gray-900">
+                        {formatAmount(deal.amount)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-gray-600 flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {formatDate(deal.createdAt)}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
+      </div>
 
-        {/* Drag Overlay */}
-        <DragOverlay>
-          {activeDeal && (
-            <div className="rotate-3 opacity-90">
-              <DealCard deal={activeDeal} />
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+      {/* Quick Stats by Pipeline */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {pipelines.map((pipeline) => {
+          const pipelineDeals = deals.filter(d => d.pipeline?.id === pipeline.id)
+          const pipelineAmount = pipelineDeals.reduce((sum, d) => sum + d.amount, 0)
 
-      {/* Stages Management Modal */}
-      {showStagesModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">Управление статусами</h2>
-              <button
-                onClick={() => setShowStagesModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* Add New Stage */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Добавить новый статус</h3>
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    placeholder="Название статуса"
-                    value={newStageName}
-                    onChange={(e) => setNewStageName(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                  <select
-                    value={newStageColor}
-                    onChange={(e) => setNewStageColor(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  >
-                    <option value="bg-gray-500">Серый</option>
-                    <option value="bg-blue-500">Синий</option>
-                    <option value="bg-indigo-500">Индиго</option>
-                    <option value="bg-purple-500">Фиолетовый</option>
-                    <option value="bg-pink-500">Розовый</option>
-                    <option value="bg-red-500">Красный</option>
-                    <option value="bg-orange-500">Оранжевый</option>
-                    <option value="bg-yellow-500">Желтый</option>
-                    <option value="bg-green-500">Зеленый</option>
-                    <option value="bg-teal-500">Бирюзовый</option>
-                  </select>
-                  <button
-                    onClick={handleAddStage}
-                    disabled={!newStageName.trim()}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Добавить
-                  </button>
+          return (
+            <div
+              key={pipeline.id}
+              onClick={() => router.push(`/dashboard/pipelines/${pipeline.slug}`)}
+              className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{pipeline.name}</p>
+                  <p className="font-bold text-gray-900">{pipelineDeals.length} сделок</p>
+                  <p className="text-xs text-gray-500">{formatAmount(pipelineAmount)}</p>
                 </div>
               </div>
-
-              {/* Existing Stages */}
-              <div className="space-y-2">
-                <h3 className="font-semibold text-gray-900 mb-3">Существующие статусы</h3>
-                {stages.map((stage) => (
-                  <div
-                    key={stage.id}
-                    className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-4 h-4 rounded-full ${stage.color}`} />
-                      <span className="font-medium text-gray-900">{stage.name}</span>
-                      {stage.isDefault && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                          Стандартный
-                        </span>
-                      )}
-                    </div>
-                    {!stage.isDefault && (
-                      <button
-                        onClick={() => handleDeleteStage(stage.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
             </div>
-
-            {/* Modal Footer */}
-            <div className="p-6 border-t border-gray-100">
-              <button
-                onClick={() => setShowStagesModal(false)}
-                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition"
-              >
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          )
+        })}
+      </div>
     </div>
   )
 }
