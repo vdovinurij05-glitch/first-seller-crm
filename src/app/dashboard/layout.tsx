@@ -13,7 +13,8 @@ import {
   Settings,
   LogOut,
   Menu,
-  X
+  X,
+  Briefcase
 } from 'lucide-react'
 import DealNotification from '@/components/DealNotification'
 import TaskNotificationProvider from '@/components/tasks/TaskNotificationProvider'
@@ -29,6 +30,7 @@ interface NotificationData {
 
 const navigation = [
   { name: 'Дашборд', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Сделки', href: '/dashboard/deals', icon: Briefcase },
   { name: 'Чат', href: '/dashboard/chat', icon: MessageSquare },
   { name: 'Контакты', href: '/dashboard/contacts', icon: Users },
   { name: 'Звонки', href: '/dashboard/calls', icon: Phone },
