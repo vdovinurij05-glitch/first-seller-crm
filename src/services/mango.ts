@@ -284,8 +284,9 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
         }
       })
 
-      // Если контакт не найден и звонок входящий, создаем новый контакт и сделку
-      if (!contact && isIncoming) {
+      // Если контакт не найден, создаем новый контакт и сделку
+      if (!contact) {
+        const callType = isIncoming ? 'Входящий' : 'Исходящий'
         const newContact = await prisma.contact.create({
           data: {
             name: `Звонок: ${clientPhone}`,
@@ -298,11 +299,11 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
         // Создаем сделку для нового контакта
         const newDeal = await prisma.deal.create({
           data: {
-            title: `Входящий звонок от ${clientPhone}`,
+            title: `${callType} звонок: ${clientPhone}`,
             amount: 0,
             stage: 'NEW',
             probability: 50,
-            description: `Автоматически создана при входящем звонке\nНомер: ${clientPhone}\nДата звонка: ${new Date(timestamp * 1000).toLocaleString('ru-RU')}`,
+            description: `Автоматически создана при ${isIncoming ? 'входящем' : 'исходящем'} звонке\nНомер: ${clientPhone}\nДата звонка: ${new Date(timestamp * 1000).toLocaleString('ru-RU')}`,
             contactId: newContact.id
           }
         })
@@ -368,14 +369,17 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
           })
 
           if (activeDeal) {
-            const direction = isIncoming ? 'входящий' : 'исходящий'
             const durationText = duration > 0
               ? `${Math.floor(duration / 60)} мин ${duration % 60} сек`
               : 'не состоялся'
 
+            const callDescription = isIncoming
+              ? `Входящий звонок: ${durationText}`
+              : `Совершен исходящий звонок: ${durationText}`
+
             await prisma.dealComment.create({
               data: {
-                content: `Звонок (${direction}): ${durationText}`,
+                content: callDescription,
                 type: 'SYSTEM_EVENT',
                 eventType: isIncoming ? 'CALL_INCOMING' : 'CALL_OUTGOING',
                 metadata: JSON.stringify({
