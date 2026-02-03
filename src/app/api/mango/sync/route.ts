@@ -282,29 +282,50 @@ async function syncCalls(calls: any[]): Promise<number> {
   return syncedCount
 }
 
-export async function GET() {
+async function performSync() {
   console.log('🚀 Mango sync v2.0 - with phone normalization')
-  try {
-    // Получаем звонки за последний час
-    const calls = await getRecentCalls(60)
+  // Получаем звонки за последний час
+  const calls = await getRecentCalls(60)
 
-    if (!calls || calls.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'No new calls to sync',
-        synced: 0
-      })
-    }
-
-    // Синхронизируем звонки
-    const syncedCount = await syncCalls(calls)
-
-    return NextResponse.json({
+  if (!calls || calls.length === 0) {
+    return {
       success: true,
-      message: `Synced ${syncedCount} calls`,
-      synced: syncedCount,
-      total: calls.length
-    })
+      message: 'No new calls to sync',
+      synced: 0
+    }
+  }
+
+  // Синхронизируем звонки
+  const syncedCount = await syncCalls(calls)
+
+  return {
+    success: true,
+    message: `Synced ${syncedCount} calls`,
+    synced: syncedCount,
+    total: calls.length
+  }
+}
+
+export async function GET() {
+  try {
+    const result = await performSync()
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error('Error in Mango sync:', error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST() {
+  try {
+    const result = await performSync()
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Error in Mango sync:', error)
     return NextResponse.json(

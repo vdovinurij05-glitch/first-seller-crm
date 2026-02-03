@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Download, FileText } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause, Download, FileText, RefreshCw, Volume2, X } from 'lucide-react'
 import { format } from 'date-fns'
 import { ru } from 'date-fns/locale/ru'
 
@@ -34,8 +34,17 @@ interface Call {
 export default function CallsPage() {
   const [calls, setCalls] = useState<Call[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [directionFilter, setDirectionFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+
+  // Audio player state
+  const [playingCallId, setPlayingCallId] = useState<string | null>(null)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [audioDuration, setAudioDuration] = useState(0)
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
     fetchCalls()
@@ -56,6 +65,93 @@ export default function CallsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Play/pause audio
+  const handlePlayRecording = async (call: Call) => {
+    if (playingCallId === call.id && isPlaying) {
+      // Pause current
+      audioRef.current?.pause()
+      setIsPlaying(false)
+      return
+    }
+
+    if (playingCallId === call.id && !isPlaying) {
+      // Resume current
+      audioRef.current?.play()
+      setIsPlaying(true)
+      return
+    }
+
+    // Play new recording
+    if (call.recordingUrl) {
+      setPlayingCallId(call.id)
+      setAudioUrl(call.recordingUrl)
+      setIsPlaying(true)
+      setCurrentTime(0)
+    }
+  }
+
+  // Close player
+  const handleClosePlayer = () => {
+    audioRef.current?.pause()
+    setPlayingCallId(null)
+    setAudioUrl(null)
+    setIsPlaying(false)
+    setCurrentTime(0)
+  }
+
+  // Audio time update
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime)
+    }
+  }
+
+  // Audio loaded
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setAudioDuration(audioRef.current.duration)
+      audioRef.current.play()
+    }
+  }
+
+  // Audio ended
+  const handleAudioEnded = () => {
+    setIsPlaying(false)
+    setCurrentTime(0)
+  }
+
+  // Seek audio
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value)
+    if (audioRef.current) {
+      audioRef.current.currentTime = time
+      setCurrentTime(time)
+    }
+  }
+
+  // Sync recordings from Mango
+  const handleSyncRecordings = async () => {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/mango/sync', { method: 'POST' })
+      if (res.ok) {
+        await fetchCalls()
+      }
+    } catch (error) {
+      console.error('Error syncing recordings:', error)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Format time for player
+  const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return '0:00'
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
   const formatDuration = (seconds?: number) => {
@@ -104,6 +200,14 @@ export default function CallsPage() {
           <p className="text-gray-500 mt-1">История звонков и записи разговоров</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleSyncRecordings}
+            disabled={syncing}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition flex items-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Синхронизация...' : 'Синхронизировать'}
+          </button>
           <select
             value={directionFilter}
             onChange={(e) => setDirectionFilter(e.target.value)}
@@ -218,16 +322,38 @@ export default function CallsPage() {
                       <div className="flex items-center gap-2">
                         {call.recordingUrl && (
                           <>
-                            <button className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
-                              <Play className="w-4 h-4" />
+                            <button
+                              onClick={() => handlePlayRecording(call)}
+                              className={`p-2 rounded-lg transition ${
+                                playingCallId === call.id && isPlaying
+                                  ? 'text-indigo-600 bg-indigo-50'
+                                  : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'
+                              }`}
+                              title="Воспроизвести"
+                            >
+                              {playingCallId === call.id && isPlaying ? (
+                                <Pause className="w-4 h-4" />
+                              ) : (
+                                <Play className="w-4 h-4" />
+                              )}
                             </button>
-                            <button className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
+                            <a
+                              href={call.recordingUrl}
+                              download
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                              title="Скачать запись"
+                            >
                               <Download className="w-4 h-4" />
-                            </button>
+                            </a>
                           </>
                         )}
+                        {!call.recordingUrl && call.status === 'COMPLETED' && (
+                          <span className="text-xs text-gray-400">Нет записи</span>
+                        )}
                         {call.transcription && (
-                          <button className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
+                          <button className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="Транскрипция">
                             <FileText className="w-4 h-4" />
                           </button>
                         )}
@@ -240,6 +366,64 @@ export default function CallsPage() {
           </table>
         </div>
       </div>
+
+      {/* Audio Player */}
+      {playingCallId && audioUrl && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 z-50">
+          <div className="max-w-4xl mx-auto flex items-center gap-4">
+            <button
+              onClick={() => {
+                if (isPlaying) {
+                  audioRef.current?.pause()
+                  setIsPlaying(false)
+                } else {
+                  audioRef.current?.play()
+                  setIsPlaying(true)
+                }
+              }}
+              className="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition"
+            >
+              {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+            </button>
+
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-500 font-mono w-12">{formatTime(currentTime)}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={audioDuration || 100}
+                  value={currentTime}
+                  onChange={handleSeek}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                />
+                <span className="text-sm text-gray-500 font-mono w-12">{formatTime(audioDuration)}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <Volume2 className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-600">
+                  {calls.find(c => c.id === playingCallId)?.contact?.name || calls.find(c => c.id === playingCallId)?.phone}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleClosePlayer}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onEnded={handleAudioEnded}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
