@@ -55,6 +55,38 @@ async function mangoRequest(endpoint: string, data: object): Promise<any> {
   return response.data
 }
 
+// Получение URL записи разговора
+async function getRecordingUrl(recordingId: string): Promise<string | null> {
+  try {
+    console.log(`🎙️ Fetching recording URL for: ${recordingId}`)
+
+    const response = await mangoRequest('/queries/recording/post/', {
+      recording_id: recordingId,
+      action: 'download' // или 'play' для стриминга
+    })
+
+    console.log('🎙️ Recording response:', response)
+
+    // Mango возвращает URL напрямую или в поле url
+    if (typeof response === 'string' && response.startsWith('http')) {
+      return response
+    }
+    if (response?.url) {
+      return response.url
+    }
+
+    return null
+  } catch (error: any) {
+    // Код 4102 = запись не найдена (нормальная ситуация для коротких/пропущенных звонков)
+    if (error?.response?.data?.code === 4102 || error?.response?.status === 404) {
+      console.log(`⚠️ No recording available for: ${recordingId}`)
+      return null
+    }
+    console.error(`❌ Error fetching recording for ${recordingId}:`, error?.message || error)
+    return null
+  }
+}
+
 // Получение звонков за последние N минут
 async function getRecentCalls(minutes: number = 60): Promise<any> {
   const dateTo = new Date()
@@ -150,7 +182,20 @@ async function syncCalls(calls: any[]): Promise<number> {
       })
 
       if (existingCall) {
-        console.log(`⏭️ Skipping duplicate call: ${entryId}`)
+        // Если звонок есть, но нет записи - пробуем получить запись
+        if (!existingCall.recordingUrl && existingCall.status === 'COMPLETED' && existingCall.duration && existingCall.duration > 0) {
+          const recordingUrl = await getRecordingUrl(entryId)
+          if (recordingUrl) {
+            await prisma.call.update({
+              where: { id: existingCall.id },
+              data: { recordingUrl }
+            })
+            console.log(`🎙️ Updated recording URL for existing call: ${entryId}`)
+            syncedCount++
+          }
+        } else {
+          console.log(`⏭️ Skipping duplicate call: ${entryId}`)
+        }
         continue
       }
 
@@ -268,6 +313,15 @@ async function syncCalls(calls: any[]): Promise<number> {
         console.log(`✅ Created new contact ${newContact.id} and deal ${newDeal.id}`)
       }
 
+      // Получаем URL записи (только для завершённых звонков с длительностью > 0)
+      let recordingUrl: string | null = null
+      if (status === 'COMPLETED' && duration > 0) {
+        recordingUrl = await getRecordingUrl(entryId)
+        if (recordingUrl) {
+          console.log(`🎙️ Got recording URL for ${entryId}`)
+        }
+      }
+
       // Создаем запись звонка
       const call = await prisma.call.create({
         data: {
@@ -281,6 +335,7 @@ async function syncCalls(calls: any[]): Promise<number> {
           endTime: finish ? new Date(typeof finish === 'number' ? finish * 1000 : parseInt(finish) * 1000) : new Date(),
           duration,
           result: disconnectReason ? String(disconnectReason) : 'completed',
+          recordingUrl,
           contactId,
           dealId
         }
