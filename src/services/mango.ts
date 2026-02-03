@@ -242,6 +242,20 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
     const isIncoming = event.call_direction === 1
     const clientPhone = isIncoming ? from.number : to.number
 
+    // Определяем extension менеджера (для входящих - to.extension, для исходящих - from.extension)
+    const managerExtension = isIncoming ? to.extension : from.extension
+
+    // Ищем менеджера по внутреннему номеру Mango
+    let manager = null
+    if (managerExtension) {
+      manager = await prisma.user.findFirst({
+        where: { mangoExtension: managerExtension }
+      })
+      if (manager) {
+        console.log(`📞 Found manager ${manager.name} by extension ${managerExtension}`)
+      }
+    }
+
     // Ищем контакт по номеру
     const contact = await prisma.contact.findFirst({
       where: { phone: clientPhone }
@@ -279,6 +293,7 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
           status: 'INITIATED',
           contactId: contact?.id,
           dealId: activeDeal?.id, // Связываем звонок со сделкой
+          managerId: manager?.id, // Связываем с менеджером по extension
           startTime: new Date(timestamp * 1000),
           createdAt: new Date(timestamp * 1000)
         }
@@ -304,7 +319,8 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
             stage: 'NEW',
             probability: 50,
             description: `Автоматически создана при ${isIncoming ? 'входящем' : 'исходящем'} звонке\nНомер: ${clientPhone}\nДата звонка: ${new Date(timestamp * 1000).toLocaleString('ru-RU')}`,
-            contactId: newContact.id
+            contactId: newContact.id,
+            managerId: manager?.id // Назначаем менеджера, который принял/совершил звонок
           }
         })
 

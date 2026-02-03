@@ -28,8 +28,30 @@ export default function SettingsPage() {
     name: user?.name || '',
     email: user?.email || '',
     phone: '',
-    avatar: user?.avatar || ''
+    avatar: user?.avatar || '',
+    mangoExtension: ''
   })
+
+  // Загрузка данных профиля
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const res = await fetch('/api/users/me')
+        if (res.ok) {
+          const data = await res.json()
+          setProfileData(prev => ({
+            ...prev,
+            name: data.user?.name || prev.name,
+            email: data.user?.email || prev.email,
+            mangoExtension: data.user?.mangoExtension || ''
+          }))
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error)
+      }
+    }
+    loadProfile()
+  }, [])
 
   // Интеграции
   const [integrations, setIntegrations] = useState({
@@ -67,12 +89,27 @@ export default function SettingsPage() {
     setSaveSuccess(false)
 
     try {
-      // Здесь будет API вызов для сохранения настроек
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
+      // Сохраняем профиль
+      const res = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: profileData.name,
+          email: profileData.email,
+          mangoExtension: profileData.mangoExtension
+        })
+      })
+
+      if (res.ok) {
+        setSaveSuccess(true)
+        setTimeout(() => setSaveSuccess(false), 3000)
+      } else {
+        const error = await res.json()
+        alert(error.message || 'Ошибка при сохранении')
+      }
     } catch (error) {
       console.error('Error saving settings:', error)
+      alert('Ошибка при сохранении настроек')
     } finally {
       setSaving(false)
     }
@@ -201,6 +238,22 @@ export default function SettingsPage() {
                       disabled
                       className="w-full px-4 py-2 border border-gray-300 rounded-xl bg-gray-50 text-gray-500"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Внутренний номер Mango Office
+                    </label>
+                    <input
+                      type="text"
+                      value={profileData.mangoExtension}
+                      onChange={(e) => setProfileData({ ...profileData, mangoExtension: e.target.value })}
+                      placeholder="101"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ваш внутренний номер в Mango Office для привязки звонков
+                    </p>
                   </div>
                 </div>
               </div>
