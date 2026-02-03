@@ -445,7 +445,7 @@ export async function handleMangoRecording(event: MangoRecordingEvent): Promise<
 
     // Если URL нет, запрашиваем по recording_id
     if (!recordingUrl && recording_id) {
-      recordingUrl = await getCallRecording(recording_id)
+      recordingUrl = await getCallRecording(recording_id) || undefined
     }
 
     console.log(`🎙️ Recording URL: ${recordingUrl}`)
