@@ -38,6 +38,7 @@ interface Deal {
   description?: string
   closedAt?: string
   createdAt: string
+  pipelineId?: string
   contact?: {
     id: string
     name: string
