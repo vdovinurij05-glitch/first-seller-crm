@@ -60,16 +60,30 @@ async function main() {
     include: {
       stages: {
         orderBy: { order: 'asc' }
+      },
+      _count: {
+        select: { deals: true }
       }
     }
   })
 
   updatedPipelines.forEach(p => {
-    console.log(`\n${p.name} (${p.id}):`)
+    console.log(`\n${p.name} (${p.id}) - ${p._count.deals} сделок:`)
     p.stages.forEach(s => {
       console.log(`  - ${s.name} (order: ${s.order})`)
     })
   })
+
+  // Проверка реального количества сделок
+  console.log('\n\n📊 Проверка сделок:')
+  for (const p of updatedPipelines) {
+    const deals = await prisma.deal.findMany({
+      where: { pipelineId: p.id },
+      select: { id: true, title: true, stage: true }
+    })
+    console.log(`\n${p.name}: ${deals.length} сделок в базе (показано ${p._count.deals})`)
+    deals.forEach(d => console.log(`  - ${d.title} | ${d.stage}`))
+  }
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect())
