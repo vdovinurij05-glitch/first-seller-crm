@@ -84,6 +84,41 @@ async function main() {
     console.log(`\n${p.name}: ${deals.length} сделок в базе (показано ${p._count.deals})`)
     deals.forEach(d => console.log(`  - ${d.title} | ${d.stage}`))
   }
+
+  // Исправление сделок с неправильным stage (ID вместо slug)
+  console.log('\n\n🔧 Исправление сделок с неправильным stage...')
+  const allDeals = await prisma.deal.findMany({
+    include: {
+      pipeline: {
+        include: {
+          stages: true
+        }
+      }
+    }
+  })
+
+  for (const deal of allDeals) {
+    if (deal.pipeline?.stages) {
+      // Проверяем, является ли текущий stage ID этапа
+      const stageById = deal.pipeline.stages.find(s => s.id === deal.stage)
+      if (stageById) {
+        console.log(`  Исправляю сделку "${deal.title}": ${deal.stage} → ${stageById.slug}`)
+        await prisma.deal.update({
+          where: { id: deal.id },
+          data: { stage: stageById.slug }
+        })
+      }
+    }
+  }
+
+  // Удаление контакта с ID cmkw9icmu00004t5xylj4tewn
+  console.log('\n\n🗑️ Удаление проблемного контакта...')
+  try {
+    await prisma.contact.delete({ where: { id: 'cmkw9icmu00004t5xylj4tewn' } })
+    console.log('  ✅ Контакт cmkw9icmu00004t5xylj4tewn удалён')
+  } catch (e) {
+    console.log('  ⚠️ Контакт уже удалён или не найден')
+  }
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect())

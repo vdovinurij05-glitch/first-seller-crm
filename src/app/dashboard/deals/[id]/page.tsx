@@ -640,7 +640,7 @@ export default function DealDetailPage() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   >
                     {(pipelines.find(p => p.id === editData.pipelineId)?.stages || stages).map((stage: any) => (
-                      <option key={stage.id || stage.slug} value={stage.id || stage.slug}>
+                      <option key={stage.slug || stage.id} value={stage.slug || stage.id}>
                         {stage.name}
                       </option>
                     ))}
@@ -703,7 +703,9 @@ export default function DealDetailPage() {
               <div>
                 <p className="text-sm text-gray-500 mb-1">Этап</p>
                 <p className="font-medium text-gray-900">
-                  {stages.find(s => s.id === deal?.stage)?.name}
+                  {pipelines.find(p => p.id === deal?.pipelineId)?.stages?.find((s: any) => s.slug === deal?.stage)?.name ||
+                   stages.find(s => s.id === deal?.stage)?.name ||
+                   deal?.stage}
                 </p>
               </div>
 
