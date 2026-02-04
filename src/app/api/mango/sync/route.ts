@@ -586,8 +586,8 @@ async function performSync() {
   // Сначала обновляем записи для существующих звонков
   const recordingsUpdated = await updateMissingRecordings()
 
-  // Получаем звонки за последний час
-  const calls = await getRecentCalls(60)
+  // Получаем звонки за последние 24 часа (увеличено для обновления старых записей)
+  const calls = await getRecentCalls(24 * 60)
 
   if (!calls || calls.length === 0) {
     return {
