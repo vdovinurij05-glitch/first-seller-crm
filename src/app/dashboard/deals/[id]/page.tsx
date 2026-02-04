@@ -27,7 +27,10 @@ import {
   Clock,
   Check,
   Search,
-  ChevronDown
+  ChevronDown,
+  Play,
+  Pause,
+  Volume2
 } from 'lucide-react'
 import TaskModal from '@/components/tasks/TaskModal'
 
@@ -143,6 +146,15 @@ export default function DealDetailPage() {
   const [contactSearch, setContactSearch] = useState('')
   const [contactDropdownOpen, setContactDropdownOpen] = useState(false)
   const contactDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Audio player state for call recordings
+  const [playingCommentId, setPlayingCommentId] = useState<string | null>(null)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [audioDuration, setAudioDuration] = useState(0)
+  const [audioLoading, setAudioLoading] = useState(false)
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   const stages = [
     { id: 'NEW', name: 'Новые' },
@@ -498,6 +510,126 @@ export default function DealDetailPage() {
       return <Video className="w-5 h-5" />
     }
     return <FileText className="w-5 h-5" />
+  }
+
+  // Play call recording from comment metadata
+  const handlePlayCallRecording = async (commentId: string, metadata: string) => {
+    try {
+      const meta = JSON.parse(metadata)
+      const callRecordId = meta.callRecordId
+
+      if (!callRecordId) {
+        alert('Записи нет в базе данных')
+        return
+      }
+
+      // If already playing this comment, toggle play/pause
+      if (playingCommentId === commentId && audioUrl) {
+        if (isPlaying) {
+          audioRef.current?.pause()
+          setIsPlaying(false)
+        } else {
+          audioRef.current?.play()
+          setIsPlaying(true)
+        }
+        return
+      }
+
+      // Fetch call recording URL
+      setAudioLoading(true)
+      const res = await fetch(`/api/calls/${callRecordId}`)
+
+      if (!res.ok) {
+        alert('Записи нет в базе данных')
+        setAudioLoading(false)
+        return
+      }
+
+      const data = await res.json()
+      const call = data.call
+
+      if (!call?.recordingUrl) {
+        alert('Записи нет в базе данных')
+        setAudioLoading(false)
+        return
+      }
+
+      // Start playing new recording
+      const fullUrl = call.recordingUrl.startsWith('http')
+        ? call.recordingUrl
+        : `${window.location.origin}${call.recordingUrl}`
+
+      setPlayingCommentId(commentId)
+      setAudioUrl(fullUrl)
+      setIsPlaying(true)
+      setCurrentTime(0)
+      setAudioLoading(false)
+    } catch (error) {
+      console.error('Error playing call recording:', error)
+      alert('Ошибка при воспроизведении записи')
+      setAudioLoading(false)
+    }
+  }
+
+  // Close audio player
+  const handleClosePlayer = () => {
+    audioRef.current?.pause()
+    setPlayingCommentId(null)
+    setAudioUrl(null)
+    setIsPlaying(false)
+    setCurrentTime(0)
+    setAudioDuration(0)
+  }
+
+  // Audio event handlers
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime)
+    }
+  }
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setAudioDuration(audioRef.current.duration)
+      audioRef.current.play().catch(err => {
+        console.error('Play failed:', err)
+        alert('Не удалось воспроизвести: ' + err.message)
+      })
+    }
+  }
+
+  const handleAudioEnded = () => {
+    setIsPlaying(false)
+    setCurrentTime(0)
+  }
+
+  const handleAudioError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
+    const audio = e.currentTarget
+    console.error('Audio error:', audio.error?.code, audio.error?.message)
+    alert(`Ошибка воспроизведения: ${audio.error?.message || 'Неизвестная ошибка'}`)
+    setIsPlaying(false)
+    setAudioLoading(false)
+  }
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value)
+    if (audioRef.current) {
+      audioRef.current.currentTime = time
+      setCurrentTime(time)
+    }
+  }
+
+  const formatAudioTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return '0:00'
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // Check if comment is a call event
+  const isCallEvent = (comment: Comment) => {
+    return comment.type === 'SYSTEM_EVENT' &&
+           (comment.eventType === 'CALL_INCOMING' || comment.eventType === 'CALL_OUTGOING')
   }
 
   if (loading) {
@@ -1026,11 +1158,38 @@ export default function DealDetailPage() {
                   const comment = item as Comment & { itemType: 'comment' }
 
                   if (comment.type === 'SYSTEM_EVENT') {
+                    // Check if this is a call event
+                    const isCall = isCallEvent(comment)
+
                     return (
                       <div key={`evt-${comment.id}`} className="flex items-center justify-center">
                         <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-full text-sm text-gray-600">
-                          <Activity className="w-4 h-4" />
+                          {isCall ? (
+                            <Phone className="w-4 h-4 text-indigo-500" />
+                          ) : (
+                            <Activity className="w-4 h-4" />
+                          )}
                           <span>{comment.content}</span>
+                          {isCall && comment.metadata && (
+                            <button
+                              onClick={() => handlePlayCallRecording(comment.id, comment.metadata!)}
+                              disabled={audioLoading && playingCommentId === comment.id}
+                              className={`p-1.5 rounded-full transition ${
+                                playingCommentId === comment.id && isPlaying
+                                  ? 'bg-indigo-100 text-indigo-600'
+                                  : 'hover:bg-indigo-100 text-gray-500 hover:text-indigo-600'
+                              }`}
+                              title="Прослушать запись"
+                            >
+                              {audioLoading && playingCommentId === comment.id ? (
+                                <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                              ) : playingCommentId === comment.id && isPlaying ? (
+                                <Pause className="w-4 h-4" />
+                              ) : (
+                                <Play className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
                           <span className="text-xs text-gray-400">
                             {formatDate(comment.createdAt)}
                           </span>
@@ -1204,6 +1363,63 @@ export default function DealDetailPage() {
           fetchComments()
         }}
       />
+
+      {/* Audio Player for Call Recordings */}
+      {playingCommentId && audioUrl && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 z-50">
+          <div className="max-w-4xl mx-auto flex items-center gap-4">
+            <button
+              onClick={() => {
+                if (isPlaying) {
+                  audioRef.current?.pause()
+                  setIsPlaying(false)
+                } else {
+                  audioRef.current?.play()
+                  setIsPlaying(true)
+                }
+              }}
+              className="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition"
+            >
+              {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+            </button>
+
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-500 font-mono w-12">{formatAudioTime(currentTime)}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={audioDuration || 100}
+                  value={currentTime}
+                  onChange={handleSeek}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                />
+                <span className="text-sm text-gray-500 font-mono w-12">{formatAudioTime(audioDuration)}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <Volume2 className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-600">Запись звонка</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleClosePlayer}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onEnded={handleAudioEnded}
+              onError={handleAudioError}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,22 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Users, Phone, MessageSquare, Briefcase, TrendingUp, TrendingDown, ArrowUpRight } from 'lucide-react'
+import {
+  Users,
+  Phone,
+  MessageSquare,
+  Briefcase,
+  TrendingUp,
+  TrendingDown,
+  ArrowUpRight,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneMissed,
+  Banknote,
+  Bell
+} from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
+import { ru } from 'date-fns/locale/ru'
 
 interface Stats {
   contacts: number
@@ -12,6 +27,27 @@ interface Stats {
   callsChange: number
   messagesChange: number
   dealsChange: number
+  dealsSum: number
+  pendingTasks: number
+}
+
+interface RecentContact {
+  id: string
+  name: string
+  phone?: string
+  telegramUsername?: string
+  source: string
+  createdAt: string
+}
+
+interface RecentCall {
+  id: string
+  phone: string
+  direction: string
+  status: string
+  duration?: number
+  contactName?: string
+  createdAt: string
 }
 
 export default function DashboardPage() {
@@ -23,26 +59,90 @@ export default function DashboardPage() {
     contactsChange: 0,
     callsChange: 0,
     messagesChange: 0,
-    dealsChange: 0
+    dealsChange: 0,
+    dealsSum: 0,
+    pendingTasks: 0
   })
+  const [recentContacts, setRecentContacts] = useState<RecentContact[]>([])
+  const [recentCalls, setRecentCalls] = useState<RecentCall[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // TODO: Fetch real stats from API
-    setTimeout(() => {
-      setStats({
-        contacts: 156,
-        calls: 43,
-        messages: 287,
-        deals: 12,
-        contactsChange: 12,
-        callsChange: -5,
-        messagesChange: 23,
-        dealsChange: 8
-      })
-      setLoading(false)
-    }, 500)
+    fetchDashboardStats()
   }, [])
+
+  const fetchDashboardStats = async () => {
+    try {
+      const res = await fetch('/api/dashboard/stats')
+      if (res.ok) {
+        const data = await res.json()
+        setStats(data.stats)
+        setRecentContacts(data.recentContacts || [])
+        setRecentCalls(data.recentCalls || [])
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount)
+  }
+
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return ''
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const formatTimeAgo = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: ru })
+    } catch {
+      return ''
+    }
+  }
+
+  const getCallIcon = (status: string, direction: string) => {
+    if (status === 'MISSED') {
+      return <PhoneMissed className="w-5 h-5 text-red-600" />
+    }
+    if (direction === 'IN') {
+      return <PhoneIncoming className="w-5 h-5 text-green-600" />
+    }
+    return <PhoneOutgoing className="w-5 h-5 text-blue-600" />
+  }
+
+  const getCallBgColor = (status: string, direction: string) => {
+    if (status === 'MISSED') return 'bg-red-100'
+    if (direction === 'IN') return 'bg-green-100'
+    return 'bg-blue-100'
+  }
+
+  const getCallStatusText = (status: string, duration?: number) => {
+    if (status === 'MISSED') return 'Пропущенный'
+    if (status === 'COMPLETED' && duration) return `Завершен • ${formatDuration(duration)}`
+    if (status === 'COMPLETED') return 'Завершен'
+    return status
+  }
+
+  const getSourceLabel = (source: string) => {
+    switch (source) {
+      case 'TELEGRAM': return 'Telegram'
+      case 'PHONE': return 'Телефон'
+      case 'MANUAL': return 'Вручную'
+      case 'WEBSITE': return 'Сайт'
+      default: return source || 'Неизвестно'
+    }
+  }
 
   const statCards = [
     {
@@ -50,28 +150,32 @@ export default function DashboardPage() {
       value: stats.contacts,
       change: stats.contactsChange,
       icon: Users,
-      color: 'bg-blue-500'
+      color: 'bg-blue-500',
+      href: '/dashboard/contacts'
     },
     {
       title: 'Звонки сегодня',
       value: stats.calls,
       change: stats.callsChange,
       icon: Phone,
-      color: 'bg-green-500'
+      color: 'bg-green-500',
+      href: '/dashboard/calls'
     },
     {
       title: 'Сообщения',
       value: stats.messages,
       change: stats.messagesChange,
       icon: MessageSquare,
-      color: 'bg-purple-500'
+      color: 'bg-purple-500',
+      href: '/dashboard/chat'
     },
     {
       title: 'Активные сделки',
       value: stats.deals,
       change: stats.dealsChange,
       icon: Briefcase,
-      color: 'bg-orange-500'
+      color: 'bg-orange-500',
+      href: '/dashboard/deals'
     }
   ]
 
@@ -96,26 +200,29 @@ export default function DashboardPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat) => (
-          <div
+          <a
             key={stat.title}
-            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
+            href={stat.href}
+            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
           >
             <div className="flex items-center justify-between">
               <div className={`p-3 rounded-xl ${stat.color}`}>
                 <stat.icon className="w-6 h-6 text-white" />
               </div>
-              <div
-                className={`flex items-center gap-1 text-sm font-medium ${
-                  stat.change >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}
-              >
-                {stat.change >= 0 ? (
-                  <TrendingUp className="w-4 h-4" />
-                ) : (
-                  <TrendingDown className="w-4 h-4" />
-                )}
-                {Math.abs(stat.change)}%
-              </div>
+              {stat.change !== 0 && (
+                <div
+                  className={`flex items-center gap-1 text-sm font-medium ${
+                    stat.change >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}
+                >
+                  {stat.change >= 0 ? (
+                    <TrendingUp className="w-4 h-4" />
+                  ) : (
+                    <TrendingDown className="w-4 h-4" />
+                  )}
+                  {Math.abs(stat.change)}%
+                </div>
+              )}
             </div>
             <div className="mt-4">
               <p className="text-3xl font-bold text-gray-900">
@@ -123,8 +230,43 @@ export default function DashboardPage() {
               </p>
               <p className="text-sm text-gray-500 mt-1">{stat.title}</p>
             </div>
-          </div>
+          </a>
         ))}
+      </div>
+
+      {/* Additional Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Deals Sum */}
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-3 bg-white/20 rounded-xl">
+              <Banknote className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-white/80 text-sm">Сумма активных сделок</p>
+              <p className="text-2xl font-bold">
+                {loading ? '...' : formatCurrency(stats.dealsSum)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Pending Tasks */}
+        <div className={`rounded-2xl p-6 ${stats.pendingTasks > 0 ? 'bg-gradient-to-br from-orange-500 to-red-500 text-white' : 'bg-white border border-gray-100'}`}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className={`p-3 rounded-xl ${stats.pendingTasks > 0 ? 'bg-white/20' : 'bg-orange-100'}`}>
+              <Bell className={`w-6 h-6 ${stats.pendingTasks > 0 ? 'text-white' : 'text-orange-600'}`} />
+            </div>
+            <div>
+              <p className={`text-sm ${stats.pendingTasks > 0 ? 'text-white/80' : 'text-gray-500'}`}>
+                Задачи на сегодня
+              </p>
+              <p className={`text-2xl font-bold ${stats.pendingTasks > 0 ? 'text-white' : 'text-gray-900'}`}>
+                {loading ? '...' : stats.pendingTasks}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Recent Activity */}
@@ -144,22 +286,38 @@ export default function DashboardPage() {
             </a>
           </div>
           <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                  <span className="text-gray-600 font-medium">
-                    {String.fromCharCode(64 + i)}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    Контакт {i}
-                  </p>
-                  <p className="text-xs text-gray-500">Telegram</p>
-                </div>
-                <span className="text-xs text-gray-400">5 мин назад</span>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
               </div>
-            ))}
+            ) : recentContacts.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">Нет контактов</p>
+            ) : (
+              recentContacts.map((contact) => (
+                <a
+                  key={contact.id}
+                  href={`/dashboard/contacts/${contact.id}`}
+                  className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <span className="text-indigo-600 font-medium">
+                      {contact.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {contact.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {contact.telegramUsername ? `@${contact.telegramUsername}` : contact.phone || getSourceLabel(contact.source)}
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {formatTimeAgo(contact.createdAt)}
+                  </span>
+                </a>
+              ))
+            )}
           </div>
         </div>
 
@@ -178,30 +336,32 @@ export default function DashboardPage() {
             </a>
           </div>
           <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    i % 2 === 0 ? 'bg-green-100' : 'bg-red-100'
-                  }`}
-                >
-                  <Phone
-                    className={`w-5 h-5 ${
-                      i % 2 === 0 ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    +7 (999) 123-45-{String(i).padStart(2, '0')}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {i % 2 === 0 ? 'Входящий • 2:45' : 'Пропущенный'}
-                  </p>
-                </div>
-                <span className="text-xs text-gray-400">10 мин назад</span>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
               </div>
-            ))}
+            ) : recentCalls.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">Нет звонков</p>
+            ) : (
+              recentCalls.map((call) => (
+                <div key={call.id} className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getCallBgColor(call.status, call.direction)}`}>
+                    {getCallIcon(call.status, call.direction)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {call.contactName || call.phone}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {call.direction === 'IN' ? 'Входящий' : 'Исходящий'} • {getCallStatusText(call.status, call.duration)}
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {formatTimeAgo(call.createdAt)}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
