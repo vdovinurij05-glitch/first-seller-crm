@@ -86,7 +86,12 @@ export default function CallsPage() {
     // Play new recording
     if (call.recordingUrl) {
       setPlayingCallId(call.id)
-      setAudioUrl(call.recordingUrl)
+      // Преобразуем относительный URL в абсолютный
+      const fullUrl = call.recordingUrl.startsWith('http')
+        ? call.recordingUrl
+        : `${window.location.origin}${call.recordingUrl}`
+      console.log('Playing audio from:', fullUrl)
+      setAudioUrl(fullUrl)
       setIsPlaying(true)
       setCurrentTime(0)
     }
@@ -120,6 +125,14 @@ export default function CallsPage() {
   const handleAudioEnded = () => {
     setIsPlaying(false)
     setCurrentTime(0)
+  }
+
+  // Audio error
+  const handleAudioError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
+    const audio = e.currentTarget
+    console.error('Audio error:', audio.error?.code, audio.error?.message)
+    alert(`Ошибка воспроизведения: ${audio.error?.message || 'Неизвестная ошибка'}`)
+    setIsPlaying(false)
   }
 
   // Seek audio
@@ -420,6 +433,8 @@ export default function CallsPage() {
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
               onEnded={handleAudioEnded}
+              onError={handleAudioError}
+              crossOrigin="anonymous"
             />
           </div>
         </div>
