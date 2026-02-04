@@ -4,6 +4,10 @@ import crypto from 'crypto'
 import axios from 'axios'
 import fs from 'fs'
 import path from 'path'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
 
 const MANGO_API_URL = 'https://app.mango-office.ru/vpbx'
 
@@ -150,9 +154,21 @@ async function downloadRecording(recordingId: string, entryId: string): Promise<
     const filename = `${safeEntryId}.${ext}`
     const filepath = path.join(RECORDINGS_DIR, filename)
 
-    // Сохраняем файл
-    fs.writeFileSync(filepath, fileResponse.data)
-    console.log(`✅ Recording saved: ${filepath} (${fileSize} bytes)`)
+    // Сохраняем временный файл
+    const tempFilepath = filepath + '.tmp'
+    fs.writeFileSync(tempFilepath, fileResponse.data)
+    console.log(`🎙️ Temp file saved: ${tempFilepath} (${fileSize} bytes)`)
+
+    // Конвертируем в стандартный формат MP3 (44100 Hz, 128 kbps) для совместимости с браузерами
+    try {
+      await execAsync(`ffmpeg -i "${tempFilepath}" -ar 44100 -ab 128k "${filepath}" -y`)
+      fs.unlinkSync(tempFilepath) // Удаляем временный файл
+      console.log(`✅ Recording converted and saved: ${filepath}`)
+    } catch (convertError) {
+      // Если ffmpeg недоступен, используем оригинальный файл
+      console.log(`⚠️ ffmpeg conversion failed, using original file`)
+      fs.renameSync(tempFilepath, filepath)
+    }
 
     // Возвращаем публичный URL
     return `/recordings/${filename}`
@@ -180,8 +196,19 @@ async function downloadRecording(recordingId: string, entryId: string): Promise<
           const filename = `${safeEntryId}.${ext}`
           const filepath = path.join(RECORDINGS_DIR, filename)
 
-          fs.writeFileSync(filepath, fileResponse.data)
-          console.log(`✅ Recording saved: ${filepath} (${fileSize} bytes)`)
+          // Сохраняем временный файл
+          const tempFilepath = filepath + '.tmp'
+          fs.writeFileSync(tempFilepath, fileResponse.data)
+
+          // Конвертируем в стандартный формат
+          try {
+            await execAsync(`ffmpeg -i "${tempFilepath}" -ar 44100 -ab 128k "${filepath}" -y`)
+            fs.unlinkSync(tempFilepath)
+            console.log(`✅ Recording converted and saved: ${filepath}`)
+          } catch {
+            fs.renameSync(tempFilepath, filepath)
+            console.log(`✅ Recording saved (no conversion): ${filepath}`)
+          }
 
           return `/recordings/${filename}`
         } catch (downloadError: any) {
