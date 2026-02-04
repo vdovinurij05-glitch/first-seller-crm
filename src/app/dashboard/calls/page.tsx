@@ -116,8 +116,12 @@ export default function CallsPage() {
   // Audio loaded
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
+      console.log('Audio loaded, duration:', audioRef.current.duration)
       setAudioDuration(audioRef.current.duration)
-      audioRef.current.play()
+      audioRef.current.play().catch(err => {
+        console.error('Play failed:', err)
+        alert('Не удалось воспроизвести: ' + err.message)
+      })
     }
   }
 
@@ -434,7 +438,6 @@ export default function CallsPage() {
               onLoadedMetadata={handleLoadedMetadata}
               onEnded={handleAudioEnded}
               onError={handleAudioError}
-              crossOrigin="anonymous"
             />
           </div>
         </div>
