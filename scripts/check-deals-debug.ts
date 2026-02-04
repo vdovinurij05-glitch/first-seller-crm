@@ -33,7 +33,7 @@ async function main() {
   console.log(`\n\n📦 Всего сделок: ${deals.length}`)
 
   // Группируем по воронкам
-  const dealsByPipeline = deals.reduce((acc, deal) => {
+  const dealsByPipeline = deals.reduce((acc: Record<string, typeof deals>, deal) => {
     const key = deal.pipelineId || 'null'
     if (!acc[key]) acc[key] = []
     acc[key].push(deal)
