@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore, useUIStore } from '@/lib/store'
 import { useEffect, useState, useRef } from 'react'
@@ -207,7 +208,10 @@ export default function DashboardLayout({
       >
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-indigo-600">First Seller</h1>
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <Image src="/logo.png" alt="First Seller" width={40} height={27} priority />
+            <span className="text-xl font-bold text-indigo-600">First Seller</span>
+          </Link>
         </div>
 
         {/* Navigation */}

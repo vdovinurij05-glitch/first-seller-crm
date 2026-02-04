@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { useAuthStore } from '@/lib/store'
-import { LogIn, Mail, Lock, Loader2 } from 'lucide-react'
+import { Mail, Lock, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -47,8 +48,8 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl shadow-xl p-8">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600 rounded-2xl mb-4">
-              <LogIn className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center justify-center mb-4">
+              <Image src="/logo.png" alt="First Seller" width={80} height={53} priority />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">First Seller CRM</h1>
             <p className="text-gray-500 mt-2">Войдите в систему</p>
