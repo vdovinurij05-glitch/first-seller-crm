@@ -209,7 +209,7 @@ export default function DashboardLayout({
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <Link href="/dashboard">
-            <Image src="/logo.png" alt="First Seller CRM" width={120} height={80} priority />
+            <Image src="/logo.png" alt="First Seller CRM" width={180} height={120} priority />
           </Link>
         </div>
 
