@@ -208,9 +208,8 @@ export default function DashboardLayout({
       >
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="First Seller" width={40} height={27} priority />
-            <span className="text-xl font-bold text-indigo-600">First Seller</span>
+          <Link href="/dashboard">
+            <Image src="/logo.png" alt="First Seller CRM" width={120} height={80} priority />
           </Link>
         </div>
 

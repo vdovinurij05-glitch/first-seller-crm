@@ -49,9 +49,8 @@ export default function LoginPage() {
           {/* Logo */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center mb-4">
-              <Image src="/logo.png" alt="First Seller" width={80} height={53} priority />
+              <Image src="/logo.png" alt="First Seller CRM" width={180} height={120} priority />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">First Seller CRM</h1>
             <p className="text-gray-500 mt-2">Войдите в систему</p>
           </div>
 
@@ -116,7 +115,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-gray-500 text-sm mt-6">
-          First Seller CRM © 2024
+          © 2024
         </p>
       </div>
     </div>
