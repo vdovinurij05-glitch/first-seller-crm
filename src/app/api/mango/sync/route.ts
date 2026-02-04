@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import crypto from 'crypto'
 import axios from 'axios'
+import fs from 'fs'
+import path from 'path'
 
 const MANGO_API_URL = 'https://app.mango-office.ru/vpbx'
 
@@ -59,13 +61,141 @@ async function mangoRequest(endpoint: string, data: object): Promise<any> {
 const MANGO_ACCOUNT_ID = '400192121' // ID аккаунта из URL записи
 const MANGO_VPBX_ID = '400363906' // ID VPBX из SIP адреса
 
+// Директория для хранения записей
+const RECORDINGS_DIR = path.join(process.cwd(), 'public', 'recordings')
+
+// Создаём директорию для записей если её нет
+if (!fs.existsSync(RECORDINGS_DIR)) {
+  fs.mkdirSync(RECORDINGS_DIR, { recursive: true })
+}
+
 // Построение URL записи из recording_id (для скачивания)
 function buildRecordingUrl(recordingId: string): string {
   return `https://lk.mango-office.ru/issa/api/${MANGO_ACCOUNT_ID}/${MANGO_VPBX_ID}/call-recording/play-record/${recordingId}`
 }
 
-// Построение URL записи в личном кабинете Mango (требует авторизации)
-// URL формат: https://lk.mango-office.ru/issa/api/{account_id}/{vpbx_id}/call-recording/play-record/{recording_id}
+// Скачивание записи через Mango API
+// Согласно документации, POST /vpbx/queries/recording/post возвращает 302 redirect на временную ссылку
+async function downloadRecording(recordingId: string, entryId: string): Promise<string | null> {
+  try {
+    console.log(`🎙️ Downloading recording: ${recordingId}`)
+
+    // Формируем запрос к API
+    const json = JSON.stringify({
+      recording_id: recordingId,
+      action: 'download'
+    })
+    const sign = generateSign(json)
+
+    const formData = new URLSearchParams()
+    formData.append('vpbx_api_key', config.apiKey)
+    formData.append('sign', sign)
+    formData.append('json', json)
+
+    // Делаем запрос с отключенным автоматическим следованием за редиректами
+    const response = await axios.post(`${MANGO_API_URL}/queries/recording/post/`, formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      maxRedirects: 0,
+      validateStatus: (status) => status >= 200 && status < 400
+    })
+
+    console.log(`🎙️ API response status: ${response.status}`)
+    console.log(`🎙️ API response headers:`, JSON.stringify(response.headers))
+
+    // API должен вернуть 302 с Location header
+    let fileUrl: string | null = null
+
+    if (response.status === 302 || response.status === 301) {
+      fileUrl = response.headers['location']
+      console.log(`🎙️ Redirect URL: ${fileUrl}`)
+    } else if (response.data?.url) {
+      fileUrl = response.data.url
+      console.log(`🎙️ URL from response body: ${fileUrl}`)
+    }
+
+    if (!fileUrl) {
+      console.log(`⚠️ No file URL in response`)
+      console.log(`🎙️ Response data:`, JSON.stringify(response.data).substring(0, 500))
+      return null
+    }
+
+    // Скачиваем файл по полученной ссылке
+    console.log(`🎙️ Downloading file from: ${fileUrl}`)
+    const fileResponse = await axios.get(fileUrl, {
+      responseType: 'arraybuffer',
+      timeout: 60000
+    })
+
+    if (fileResponse.status !== 200) {
+      console.log(`⚠️ File download failed: ${fileResponse.status}`)
+      return null
+    }
+
+    const fileSize = fileResponse.data.length
+    console.log(`🎙️ Downloaded ${fileSize} bytes`)
+
+    if (fileSize < 1000) {
+      console.log(`⚠️ File too small, likely an error`)
+      return null
+    }
+
+    // Определяем расширение файла
+    const contentType = fileResponse.headers['content-type'] || 'audio/mpeg'
+    const ext = contentType.includes('wav') ? 'wav' : 'mp3'
+
+    // Генерируем имя файла (используем entry_id для уникальности)
+    const safeEntryId = entryId.replace(/[^a-zA-Z0-9]/g, '_')
+    const filename = `${safeEntryId}.${ext}`
+    const filepath = path.join(RECORDINGS_DIR, filename)
+
+    // Сохраняем файл
+    fs.writeFileSync(filepath, fileResponse.data)
+    console.log(`✅ Recording saved: ${filepath} (${fileSize} bytes)`)
+
+    // Возвращаем публичный URL
+    return `/recordings/${filename}`
+  } catch (error: any) {
+    // Обрабатываем redirect как ошибку axios (при maxRedirects: 0)
+    if (error.response?.status === 302 || error.response?.status === 301) {
+      const fileUrl = error.response.headers['location']
+      if (fileUrl) {
+        console.log(`🎙️ Got redirect URL from error: ${fileUrl}`)
+        try {
+          const fileResponse = await axios.get(fileUrl, {
+            responseType: 'arraybuffer',
+            timeout: 60000
+          })
+
+          const fileSize = fileResponse.data.length
+          if (fileSize < 1000) {
+            console.log(`⚠️ File too small`)
+            return null
+          }
+
+          const contentType = fileResponse.headers['content-type'] || 'audio/mpeg'
+          const ext = contentType.includes('wav') ? 'wav' : 'mp3'
+          const safeEntryId = entryId.replace(/[^a-zA-Z0-9]/g, '_')
+          const filename = `${safeEntryId}.${ext}`
+          const filepath = path.join(RECORDINGS_DIR, filename)
+
+          fs.writeFileSync(filepath, fileResponse.data)
+          console.log(`✅ Recording saved: ${filepath} (${fileSize} bytes)`)
+
+          return `/recordings/${filename}`
+        } catch (downloadError: any) {
+          console.error(`❌ File download failed:`, downloadError?.message)
+        }
+      }
+    }
+
+    console.error(`❌ Recording download error:`, error?.response?.status, error?.response?.data || error?.message)
+    return null
+  }
+}
+
+// Построение URL записи в личном кабинете Mango (требует авторизации) - fallback
 function buildMangoRecordingUrl(recordingId: string): string {
   return `https://lk.mango-office.ru/issa/api/${MANGO_ACCOUNT_ID}/${MANGO_VPBX_ID}/call-recording/play-record/${recordingId}`
 }
@@ -98,26 +228,42 @@ function extractRecordingId(recordsField: string): string | null {
   }
 }
 
-// Получение URL записи разговора (строит URL для личного кабинета Mango)
-// Для прослушивания записи нужно быть авторизованным в lk.mango-office.ru
-function getRecordingUrl(entryId: string, recordsField?: string): string | null {
-  console.log(`🎙️ Building recording URL for entry: ${entryId}, records: ${recordsField}`)
+// Получение URL записи разговора
+// Сначала пытаемся скачать через API, если не получится - возвращаем URL для ЛК
+async function getRecordingUrl(entryId: string, recordsField?: string): Promise<string | null> {
+  console.log(`🎙️ Getting recording URL for entry: ${entryId}, records: ${recordsField}`)
 
-  // Извлекаем recording_id из поля records
-  let recordingId: string | null = null
-  if (recordsField && recordsField !== '' && recordsField !== '0') {
-    recordingId = extractRecordingId(recordsField)
-  }
-
-  if (!recordingId) {
-    console.log(`⚠️ No recording_id found for: ${entryId}`)
+  if (!recordsField || recordsField === '' || recordsField === '0') {
+    console.log(`⚠️ No records field for: ${entryId}`)
     return null
   }
 
-  // Строим URL для прослушивания в личном кабинете Mango
-  const url = buildMangoRecordingUrl(recordingId)
-  console.log(`✅ Recording URL: ${url}`)
-  return url
+  // Получаем сырое base64 значение из поля records (без скобок)
+  // Согласно документации Mango, recording_id должен быть в формате base64
+  let rawRecordingId = recordsField.trim()
+  if (rawRecordingId.startsWith('[') && rawRecordingId.endsWith(']')) {
+    rawRecordingId = rawRecordingId.slice(1, -1)
+  }
+
+  console.log(`🎙️ Raw recording_id (base64): ${rawRecordingId}`)
+
+  // Пытаемся скачать запись через API
+  const localUrl = await downloadRecording(rawRecordingId, entryId)
+  if (localUrl) {
+    console.log(`✅ Recording downloaded: ${localUrl}`)
+    return localUrl
+  }
+
+  // Если скачать не удалось, извлекаем числовой ID для URL в ЛК
+  const numericId = extractRecordingId(recordsField)
+  if (numericId) {
+    const lkUrl = buildMangoRecordingUrl(numericId)
+    console.log(`🎙️ Fallback to LK URL: ${lkUrl}`)
+    return lkUrl
+  }
+
+  console.log(`⚠️ No recording available for: ${entryId}`)
+  return null
 }
 
 // Получение звонков за последние N минут
