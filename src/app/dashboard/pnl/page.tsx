@@ -582,7 +582,7 @@ export default function PnLPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}к`} fontSize={12} />
                   <YAxis type="category" dataKey="name" width={120} fontSize={12} />
-                  <Tooltip formatter={(v: number) => formatMoney(v)} />
+                  <Tooltip formatter={(v) => formatMoney(Number(v))} />
                   <Bar dataKey="expense" fill="#6366f1" radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -609,7 +609,7 @@ export default function PnLPage() {
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatMoney(v)} />
+                  <Tooltip formatter={(v) => formatMoney(Number(v))} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
