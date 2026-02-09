@@ -15,7 +15,8 @@ import {
   LogOut,
   Menu,
   X,
-  Briefcase
+  Briefcase,
+  TrendingUp
 } from 'lucide-react'
 import DealNotification from '@/components/DealNotification'
 import TaskNotificationProvider from '@/components/tasks/TaskNotificationProvider'
@@ -36,8 +37,9 @@ const navigation = [
   { name: 'Контакты', href: '/dashboard/contacts', icon: Users },
   { name: 'Звонки', href: '/dashboard/calls', icon: Phone },
   { name: 'Воронки', href: '/dashboard/pipelines', icon: Filter },
+  { name: 'P&L', href: '/dashboard/pnl', icon: TrendingUp, adminOnly: true },
   { name: 'Настройки', href: '/dashboard/settings', icon: Settings },
-]
+] as const
 
 export default function DashboardLayout({
   children,
@@ -215,7 +217,9 @@ export default function DashboardLayout({
 
         {/* Navigation */}
         <nav className="p-4 space-y-1">
-          {navigation.map((item) => {
+          {navigation
+            .filter(item => !('adminOnly' in item && item.adminOnly) || user?.role === 'ADMIN')
+            .map((item) => {
             const isActive = pathname === item.href
             return (
               <Link

@@ -266,3 +266,119 @@ model Task {
 
   @@map("tasks")
 }
+
+// Сотрудники (Зарплатный проект)
+model Employee {
+  id               String   @id @default(cuid())
+  name             String              // ФИО
+  position         String?             // должность
+  officialSalary   Float    @default(0) // белая ЗП (оклад)
+  unofficialSalary Float    @default(0) // чёрная ЗП
+  businessUnitId   String?             // привязка к направлению
+  businessUnit     BusinessUnit? @relation(fields: [businessUnitId], references: [id])
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  payments         SalaryPayment[]
+
+  @@map("employees")
+}
+
+// Выплаты зарплат (привязка к календарю)
+model SalaryPayment {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  amount     Float               // фактическая сумма выплаты
+  salaryType String              // "OFFICIAL" | "UNOFFICIAL"
+  date       DateTime            // дата выплаты (10-е или 25-е)
+  isPaid     Boolean  @default(false)
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("salary_payments")
+}
+
+// Займы, кредиты, лизинги
+model Loan {
+  id             String   @id @default(cuid())
+  name           String              // "Кредит Сбер", "Лизинг авто", "Займ от ИП"
+  loanType       String              // "CREDIT" | "LEASING" | "LOAN"
+  totalAmount    Float               // общая сумма займа
+  remainingAmount Float              // остаток долга
+  monthlyPayment Float               // ежемесячный платёж
+  interestRate   Float?              // ставка %
+  paymentDay     Int      @default(1) // число месяца оплаты
+  startDate      DateTime            // дата оформления
+  endDate        DateTime?           // дата окончания
+  creditor       String?             // кредитор (банк, лизинговая компания, ФИО)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  payments       LoanPayment[]
+
+  @@map("loans")
+}
+
+// Платежи по займам
+model LoanPayment {
+  id       String   @id @default(cuid())
+  loanId   String
+  loan     Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  amount   Float
+  date     DateTime
+  isPaid   Boolean  @default(false)
+  comment  String?
+  createdAt DateTime @default(now())
+
+  @@map("loan_payments")
+}
+
+// Бизнес-направления (P&L)
+model BusinessUnit {
+  id        String   @id @default(cuid())
+  name      String                // "Агентство Первый Селлер", "Банкротство"...
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  records   FinanceRecord[]
+  employees Employee[]
+
+  @@map("business_units")
+}
+
+// Категории финансов (P&L)
+model FinanceCategory {
+  id        String   @id @default(cuid())
+  name      String                // "Зарплата чёрная", "Аренда", "Реклама"...
+  type      String                // "INCOME" | "EXPENSE"
+  group     String?               // "SALARY" | "ADMIN" | "MANDATORY" | "MARKETING" | "OTHER"
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  records   FinanceRecord[]
+
+  @@map("finance_categories")
+}
+
+// Записи финансов (P&L)
+model FinanceRecord {
+  id          String   @id @default(cuid())
+  amount      Float
+  type        String              // "INCOME" | "EXPENSE"
+  description String?
+  date        DateTime            // дата операции
+  dueDate     DateTime?           // дата оплаты (для платёжного календаря)
+  isPaid      Boolean  @default(true)
+  counterparty String?            // контрагент (кому должны / кто должен нам)
+  debtType     String?            // "RECEIVABLE" (нам должны) | "PAYABLE" (мы должны) | null (обычная запись)
+  categoryId  String
+  category    FinanceCategory @relation(fields: [categoryId], references: [id])
+  businessUnitId String?
+  businessUnit   BusinessUnit? @relation(fields: [businessUnitId], references: [id])
+  userId      String?             // кто создал запись
+  source      String   @default("MANUAL") // "MANUAL" | "BANK" | "EXCEL" | "TELEGRAM"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("finance_records")
+}
