@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
       debtType: debtType || null,
       client: client || null,
       salesManagerId: salesManagerId || null,
+      fromSafe: type === 'EXPENSE' ? (body.fromSafe === true) : false,
       categoryId,
       businessUnitId: businessUnitId || null,
       userId: admin.id,

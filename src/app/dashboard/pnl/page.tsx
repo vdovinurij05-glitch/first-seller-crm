@@ -24,7 +24,8 @@ import {
   List,
   Users,
   HandCoins,
-  HelpCircle
+  HelpCircle,
+  Lock
 } from 'lucide-react'
 import {
   BarChart,
@@ -70,6 +71,7 @@ interface FinanceRecord {
   client: string | null
   salesManagerId: string | null
   salesManager: SalesEmployee | null
+  fromSafe: boolean
   categoryId: string
   businessUnitId: string | null
   category: FinanceCategory
@@ -85,6 +87,7 @@ interface Summary {
   totalUnpaid: number
   totalReceivable: number
   totalPayable: number
+  safeBalance: number
   byCategory: { name: string; group: string | null; income: number; expense: number }[]
   byBusinessUnit: { name: string; income: number; expense: number }[]
   upcomingExpenses: FinanceRecord[]
@@ -154,6 +157,11 @@ export default function PnLPage() {
   const [showAddBU, setShowAddBU] = useState(false)
   const [showManageBU, setShowManageBU] = useState(false)
   const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null)
+  const [showSafeSettings, setShowSafeSettings] = useState(false)
+  const [safeForm, setSafeForm] = useState({
+    initialBalance: '',
+    effectiveDate: new Date().getFullYear() + '-01-01'
+  })
 
   // Форма записи
   const [form, setForm] = useState({
@@ -168,7 +176,8 @@ export default function PnLPage() {
     counterparty: '',
     debtType: '',
     client: '',
-    salesManagerId: ''
+    salesManagerId: '',
+    fromSafe: false
   })
 
   // Форма категории
@@ -306,6 +315,35 @@ export default function PnLPage() {
     }
   }
 
+  async function fetchSafeSettings() {
+    const res = await fetch('/api/pnl/safe')
+    if (res.ok) {
+      const data = await res.json()
+      if (data.settings) {
+        setSafeForm({
+          initialBalance: String(data.settings.initialBalance),
+          effectiveDate: data.settings.effectiveDate.split('T')[0]
+        })
+      }
+    }
+  }
+
+  async function handleSubmitSafeSettings(e: React.FormEvent) {
+    e.preventDefault()
+    const res = await fetch('/api/pnl/safe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        initialBalance: parseFloat(safeForm.initialBalance),
+        effectiveDate: safeForm.effectiveDate
+      })
+    })
+    if (res.ok) {
+      setShowSafeSettings(false)
+      fetchAll()
+    }
+  }
+
   function resetForm() {
     setForm({
       amount: '',
@@ -319,7 +357,8 @@ export default function PnLPage() {
       counterparty: '',
       debtType: '',
       client: '',
-      salesManagerId: ''
+      salesManagerId: '',
+      fromSafe: false
     })
   }
 
@@ -337,7 +376,8 @@ export default function PnLPage() {
       counterparty: record.counterparty || '',
       debtType: record.debtType || '',
       client: record.client || '',
-      salesManagerId: record.salesManagerId || ''
+      salesManagerId: record.salesManagerId || '',
+      fromSafe: record.fromSafe || false
     })
     setShowAddRecord(true)
   }
@@ -473,7 +513,7 @@ export default function PnLPage() {
 
       {/* Виджеты сводки */}
       {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Доходы</span>
@@ -530,6 +570,28 @@ export default function PnLPage() {
             <p className={`text-2xl font-bold ${summary.totalUnpaid > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
               {formatMoney(summary.totalUnpaid)}
             </p>
+          </div>
+
+          {/* Сейф */}
+          <div
+            className="rounded-2xl border p-5 hover:shadow-md transition cursor-pointer bg-gradient-to-br from-violet-50 to-purple-50 border-violet-100"
+            onClick={() => {
+              fetchSafeSettings()
+              setShowSafeSettings(true)
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Сейф</span>
+              <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                <Lock className="w-4 h-4 text-violet-600" />
+              </div>
+            </div>
+            <p className={`text-2xl font-bold ${
+              summary.safeBalance >= 0 ? 'text-violet-700' : 'text-red-600'
+            }`}>
+              {formatMoney(summary.safeBalance)}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Нажмите для настройки</p>
           </div>
         </div>
       )}
@@ -777,6 +839,9 @@ export default function PnLPage() {
                     r.type === 'INCOME' ? 'text-emerald-600' : 'text-red-500'
                   }`}>
                     {r.type === 'INCOME' ? '+' : '−'}{formatMoney(r.amount)}
+                    {r.fromSafe && (
+                      <span className="ml-1 text-xs text-violet-500">(сейф)</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1">
@@ -1051,6 +1116,20 @@ export default function PnLPage() {
                 <FieldHint text="Снимите галочку, если платёж запланирован, но ещё не оплачен. Неоплаченные записи попадают в раздел «Ожидает оплаты» и отображаются в платёжном календаре красным." />
               </label>
 
+              {/* Из сейфа (только для расходов) */}
+              {form.type === 'EXPENSE' && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.fromSafe}
+                    onChange={e => setForm(f => ({ ...f, fromSafe: e.target.checked }))}
+                    className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                  />
+                  <span className="text-sm text-gray-700">Оплата из сейфа</span>
+                  <FieldHint text="Отметьте, если этот расход оплачен наличными из сейфа. Сумма автоматически спишется с баланса сейфа." />
+                </label>
+              )}
+
               <button
                 type="submit"
                 className="w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition"
@@ -1267,6 +1346,61 @@ export default function PnLPage() {
               />
               <button type="submit" className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition">
                 Создать
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка: Настройки сейфа */}
+      {showSafeSettings && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4"
+          onClick={() => setShowSafeSettings(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-gray-900">Настройки сейфа</h2>
+              <button
+                onClick={() => setShowSafeSettings(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmitSafeSettings} className="space-y-4">
+              <div>
+                <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
+                  Начальный баланс
+                  <FieldHint text="Сумма наличных в сейфе на дату начала учёта. Все расходы с отметкой «Из сейфа» будут вычитаться из этой суммы." />
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={safeForm.initialBalance}
+                  onChange={e => setSafeForm(f => ({ ...f, initialBalance: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-lg font-semibold focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  placeholder="0"
+                  required
+                />
+              </div>
+              <div>
+                <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
+                  Дата начала учёта
+                  <FieldHint text="Дата, с которой начинается учёт расходов из сейфа. Обычно это 1 января текущего года." />
+                </label>
+                <input
+                  type="date"
+                  value={safeForm.effectiveDate}
+                  onChange={e => setSafeForm(f => ({ ...f, effectiveDate: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition"
+              >
+                Сохранить
               </button>
             </form>
           </div>

@@ -381,9 +381,21 @@ model FinanceRecord {
   businessUnitId String?
   businessUnit   BusinessUnit? @relation(fields: [businessUnitId], references: [id])
   userId      String?             // кто создал запись
+  fromSafe    Boolean  @default(false)     // оплата из сейфа (наличных)
   source      String   @default("MANUAL") // "MANUAL" | "BANK" | "EXCEL" | "TELEGRAM"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("finance_records")
+}
+
+// Настройки сейфа (начальный баланс наличных)
+model SafeSettings {
+  id             String   @id @default(cuid())
+  initialBalance Float               // начальный баланс сейфа
+  effectiveDate  DateTime            // дата начала учёта
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("safe_settings")
 }

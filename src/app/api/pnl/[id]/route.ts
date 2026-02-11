@@ -44,6 +44,7 @@ export async function PUT(
       ...(debtType !== undefined && { debtType: debtType || null }),
       ...(client !== undefined && { client: client || null }),
       ...(salesManagerId !== undefined && { salesManagerId: salesManagerId || null }),
+      ...(body.fromSafe !== undefined && { fromSafe: body.fromSafe === true }),
       ...(categoryId && { categoryId }),
       ...(businessUnitId !== undefined && { businessUnitId: businessUnitId || null }),
     },

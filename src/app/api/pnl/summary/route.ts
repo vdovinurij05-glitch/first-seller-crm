@@ -110,6 +110,21 @@ export async function GET(request: NextRequest) {
   })
   const totalPayable = payables.reduce((sum, r) => sum + r.amount, 0)
 
+  // Баланс сейфа (глобальный, не зависит от фильтров)
+  const safeSettings = await prisma.safeSettings.findFirst()
+  let safeBalance = 0
+  if (safeSettings) {
+    const safeExpenses = await prisma.financeRecord.aggregate({
+      where: {
+        fromSafe: true,
+        type: 'EXPENSE',
+        date: { gte: safeSettings.effectiveDate }
+      },
+      _sum: { amount: true }
+    })
+    safeBalance = safeSettings.initialBalance - (safeExpenses._sum.amount || 0)
+  }
+
   return NextResponse.json({
     period: { from: dateFrom, to: dateTo },
     totalIncome,
@@ -118,6 +133,7 @@ export async function GET(request: NextRequest) {
     totalUnpaid,
     totalReceivable,
     totalPayable,
+    safeBalance,
     byCategory: Object.values(byCategory),
     byBusinessUnit: Object.values(byBusinessUnit),
     upcomingExpenses,
