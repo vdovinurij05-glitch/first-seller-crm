@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { name, position, officialSalary, unofficialSalary, businessUnitId } = body
+  const { name, position, officialSalary, unofficialSalary, businessUnitId, salesCommissionPercent } = body
 
   if (!name) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       position: position || null,
       officialSalary: parseFloat(officialSalary) || 0,
       unofficialSalary: parseFloat(unofficialSalary) || 0,
+      salesCommissionPercent: parseFloat(salesCommissionPercent) || 0,
       businessUnitId: businessUnitId || null,
     },
     include: { businessUnit: true }

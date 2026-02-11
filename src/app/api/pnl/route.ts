@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
     where,
     include: {
       category: true,
-      businessUnit: true
+      businessUnit: true,
+      salesManager: true
     },
     orderBy: { date: 'desc' }
   })
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { amount, type, description, date, dueDate, isPaid, categoryId, businessUnitId, counterparty, debtType } = body
+  const { amount, type, description, date, dueDate, isPaid, categoryId, businessUnitId, counterparty, debtType, client, salesManagerId } = body
 
   if (!amount || !type || !categoryId || !date) {
     return NextResponse.json({ error: 'amount, type, categoryId, date are required' }, { status: 400 })
@@ -81,6 +82,8 @@ export async function POST(request: NextRequest) {
       isPaid: isPaid !== false,
       counterparty: counterparty || null,
       debtType: debtType || null,
+      client: client || null,
+      salesManagerId: salesManagerId || null,
       categoryId,
       businessUnitId: businessUnitId || null,
       userId: admin.id,
@@ -88,7 +91,8 @@ export async function POST(request: NextRequest) {
     },
     include: {
       category: true,
-      businessUnit: true
+      businessUnit: true,
+      salesManager: true
     }
   })
 

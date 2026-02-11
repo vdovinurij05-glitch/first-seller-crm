@@ -38,6 +38,7 @@ export async function PUT(
       ...(body.officialSalary !== undefined && { officialSalary: parseFloat(body.officialSalary) || 0 }),
       ...(body.unofficialSalary !== undefined && { unofficialSalary: parseFloat(body.unofficialSalary) || 0 }),
       ...(body.isActive !== undefined && { isActive: body.isActive }),
+      ...(body.salesCommissionPercent !== undefined && { salesCommissionPercent: parseFloat(body.salesCommissionPercent) || 0 }),
       ...(body.businessUnitId !== undefined && { businessUnitId: body.businessUnitId || null }),
     },
     include: { businessUnit: true }

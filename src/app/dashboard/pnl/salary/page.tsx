@@ -19,7 +19,8 @@ import {
   Zap,
   HelpCircle,
   Building2,
-  Filter
+  Filter,
+  TrendingUp
 } from 'lucide-react'
 
 interface BusinessUnit {
@@ -33,9 +34,18 @@ interface Employee {
   position: string | null
   officialSalary: number
   unofficialSalary: number
+  salesCommissionPercent: number
   businessUnitId: string | null
   businessUnit: BusinessUnit | null
   isActive: boolean
+}
+
+interface CommissionData {
+  employee: Employee
+  totalSales: number
+  commissionPercent: number
+  commissionAmount: number
+  isGenerated: boolean
 }
 
 interface SalaryPayment {
@@ -85,6 +95,7 @@ export default function SalaryPage() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [editingPayment, setEditingPayment] = useState<SalaryPayment | null>(null)
   const [filterBU, setFilterBU] = useState<string>('all')
+  const [commissions, setCommissions] = useState<CommissionData[]>([])
 
   const [currentDate, setCurrentDate] = useState(new Date())
   const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
@@ -94,6 +105,7 @@ export default function SalaryPage() {
     position: '',
     officialSalary: '',
     unofficialSalary: '',
+    salesCommissionPercent: '',
     businessUnitId: '',
   })
 
@@ -110,6 +122,7 @@ export default function SalaryPage() {
 
   useEffect(() => {
     fetchPayments()
+    fetchCommissions()
   }, [currentMonth])
 
   const fetchEmployees = async () => {
@@ -147,6 +160,19 @@ export default function SalaryPage() {
     }
   }
 
+  const fetchCommissions = async () => {
+    try {
+      const res = await fetch(`/api/pnl/commissions?month=${currentMonth}`)
+      if (res.ok) {
+        const data = await res.json()
+        setCommissions(data.commissions || [])
+      }
+    } catch (error) {
+      console.error('Error fetching commissions:', error)
+      setCommissions([])
+    }
+  }
+
   const handleSubmitEmployee = async (e: React.FormEvent) => {
     e.preventDefault()
     const url = editingEmployee ? `/api/pnl/employees/${editingEmployee.id}` : '/api/pnl/employees'
@@ -158,7 +184,7 @@ export default function SalaryPage() {
     if (res.ok) {
       setShowAddEmployee(false)
       setEditingEmployee(null)
-      setForm({ name: '', position: '', officialSalary: '', unofficialSalary: '', businessUnitId: '' })
+      setForm({ name: '', position: '', officialSalary: '', unofficialSalary: '', salesCommissionPercent: '', businessUnitId: '' })
       fetchEmployees()
     }
   }
@@ -182,6 +208,25 @@ export default function SalaryPage() {
       const data = await res.json()
       alert(`Создано ${data.generated} выплат`)
       fetchPayments()
+    } else {
+      const err = await res.json()
+      alert(err.error || 'Ошибка')
+    }
+  }
+
+  const handleGenerateCommissions = async () => {
+    const monthName = currentDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+    if (!confirm(`Сгенерировать выплаты комиссий за ${monthName}?\n\nКомиссия выплачивается 10-го числа следующего месяца.`)) return
+    const res = await fetch('/api/pnl/commissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month: currentMonth }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      alert(data.generated > 0 ? `Создано ${data.generated} комиссионных выплат` : 'Нет новых комиссий для генерации')
+      fetchPayments()
+      fetchCommissions()
     } else {
       const err = await res.json()
       alert(err.error || 'Ошибка')
@@ -225,6 +270,7 @@ export default function SalaryPage() {
       position: emp.position || '',
       officialSalary: String(emp.officialSalary),
       unofficialSalary: String(emp.unofficialSalary),
+      salesCommissionPercent: String(emp.salesCommissionPercent),
       businessUnitId: emp.businessUnitId || '',
     })
     setShowAddEmployee(true)
@@ -277,6 +323,7 @@ export default function SalaryPage() {
   // Сводка
   const totalOfficial = filteredEmployees.reduce((s, e) => s + e.officialSalary, 0)
   const totalUnofficial = filteredEmployees.reduce((s, e) => s + e.unofficialSalary, 0)
+  const totalCommissions = commissions.reduce((s, c) => s + c.commissionAmount, 0)
   const totalFOT = totalOfficial + totalUnofficial
 
   // Сводка выплат
@@ -317,7 +364,7 @@ export default function SalaryPage() {
         <button
           onClick={() => {
             setEditingEmployee(null)
-            setForm({ name: '', position: '', officialSalary: '', unofficialSalary: '', businessUnitId: '' })
+            setForm({ name: '', position: '', officialSalary: '', unofficialSalary: '', salesCommissionPercent: '', businessUnitId: '' })
             setShowAddEmployee(true)
           }}
           className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition"
@@ -436,6 +483,7 @@ export default function SalaryPage() {
                 <th className="text-right px-4 py-3 font-medium">Белая ЗП</th>
                 <th className="text-right px-4 py-3 font-medium">Чёрная ЗП</th>
                 <th className="text-right px-4 py-3 font-medium">Итого</th>
+                <th className="text-right px-4 py-3 font-medium">% Комиссии</th>
                 <th className="text-right px-6 py-3 font-medium w-24"></th>
               </tr>
             </thead>
@@ -444,7 +492,7 @@ export default function SalaryPage() {
                 <Fragment key={buName}>
                   {Object.keys(employeesByBU).length > 1 && (
                     <tr className="bg-indigo-50/50">
-                      <td colSpan={6} className="px-6 py-2">
+                      <td colSpan={7} className="px-6 py-2">
                         <span className="text-xs font-semibold text-indigo-600 flex items-center gap-1.5">
                           <Building2 className="w-3.5 h-3.5" />
                           {buName}
@@ -469,6 +517,9 @@ export default function SalaryPage() {
                       <td className="text-right px-4 py-3.5 text-sm text-emerald-600 font-medium">{formatMoney(emp.officialSalary)}</td>
                       <td className="text-right px-4 py-3.5 text-sm text-gray-600 font-medium">{formatMoney(emp.unofficialSalary)}</td>
                       <td className="text-right px-4 py-3.5 text-sm font-bold text-gray-900">{formatMoney(emp.officialSalary + emp.unofficialSalary)}</td>
+                      <td className="text-right px-4 py-3.5 text-sm text-indigo-600 font-medium">
+                        {emp.salesCommissionPercent > 0 ? `${emp.salesCommissionPercent}%` : '—'}
+                      </td>
                       <td className="text-right px-6 py-3.5">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEditEmployee(emp)} className="p-1.5 hover:bg-gray-100 rounded-lg transition">
@@ -490,6 +541,7 @@ export default function SalaryPage() {
                 <td className="text-right px-4 py-3.5 text-sm text-gray-700">{formatMoney(totalUnofficial)}</td>
                 <td className="text-right px-4 py-3.5 text-sm text-gray-900">{formatMoney(totalFOT)}</td>
                 <td></td>
+                <td></td>
               </tr>
             </tbody>
           </table>
@@ -500,6 +552,75 @@ export default function SalaryPage() {
             <button onClick={() => setShowAddEmployee(true)} className="mt-3 text-indigo-600 text-sm font-medium hover:underline">
               Добавить первого сотрудника
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* Комиссии за месяц */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <TrendingUp className="w-4 h-4 text-amber-600" />
+            <h2 className="font-semibold text-gray-900">Комиссии с продаж</h2>
+            <span className="text-sm text-gray-400">
+              {currentDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+            </span>
+          </div>
+          {commissions.length > 0 && (
+            <button
+              onClick={handleGenerateCommissions}
+              className="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-sm font-medium hover:bg-amber-100 transition"
+            >
+              <Zap className="w-4 h-4" />
+              Сгенерировать комиссии
+            </button>
+          )}
+        </div>
+
+        {commissions.length > 0 ? (
+          <>
+            <div className="px-6 py-3 border-b border-gray-100 bg-amber-50/30 flex items-center gap-3">
+              <span className="text-xs font-medium text-gray-500">Итого комиссий:</span>
+              <span className="text-sm font-bold text-amber-700">{formatMoney(totalCommissions)}</span>
+              <span className="text-xs text-gray-400">• выплата 10-го следующего месяца</span>
+            </div>
+            <table className="w-full">
+              <thead>
+                <tr className="text-xs text-gray-500 border-b border-gray-50">
+                  <th className="text-left px-6 py-3 font-medium">Менеджер</th>
+                  <th className="text-right px-4 py-3 font-medium">Продажи</th>
+                  <th className="text-right px-4 py-3 font-medium">%</th>
+                  <th className="text-right px-4 py-3 font-medium">Комиссия</th>
+                  <th className="text-right px-6 py-3 font-medium">Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {commissions.map(c => (
+                  <tr key={c.employee.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                    <td className="px-6 py-3.5">
+                      <p className="text-sm font-medium text-gray-900">{c.employee.name}</p>
+                      {c.employee.position && <p className="text-xs text-gray-400">{c.employee.position}</p>}
+                    </td>
+                    <td className="text-right px-4 py-3.5 text-sm text-gray-600">{formatMoney(c.totalSales)}</td>
+                    <td className="text-right px-4 py-3.5 text-sm text-indigo-600 font-medium">{c.commissionPercent}%</td>
+                    <td className="text-right px-4 py-3.5 text-sm font-bold text-amber-700">{formatMoney(c.commissionAmount)}</td>
+                    <td className="text-right px-6 py-3.5">
+                      {c.isGenerated ? (
+                        <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">Создана</span>
+                      ) : (
+                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Ожидает</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <div className="p-8 text-center">
+            <TrendingUp className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">Нет комиссий за этот месяц</p>
+            <p className="text-xs text-gray-400 mt-1">Добавьте INCOME записи с менеджером в P&L</p>
           </div>
         )}
       </div>
@@ -589,7 +710,7 @@ export default function SalaryPage() {
                             )}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {p.salaryType === 'OFFICIAL' ? 'Белая' : 'Чёрная'}
+                            {p.salaryType === 'OFFICIAL' ? 'Белая' : p.salaryType === 'UNOFFICIAL' ? 'Чёрная' : 'Комиссия'}
                             {p.comment ? ` · ${p.comment}` : ''}
                           </p>
                         </div>
@@ -701,6 +822,22 @@ export default function SalaryPage() {
                   />
                 </div>
               </div>
+              <div>
+                <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
+                  % комиссии от продаж
+                  <FieldHint text="Процент комиссии от доходов, привлечённых этим сотрудником. Выплата формируется 10-го числа следующего месяца на основании INCOME записей в P&L, к которым привязан этот менеджер." />
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={form.salesCommissionPercent}
+                  onChange={e => setForm(f => ({ ...f, salesCommissionPercent: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="0"
+                />
+              </div>
               <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition">
                 {editingEmployee ? 'Сохранить' : 'Добавить сотрудника'}
               </button>
@@ -720,7 +857,7 @@ export default function SalaryPage() {
               </button>
             </div>
             <p className="text-sm text-gray-500 mb-4">
-              {editingPayment.employee.name} · {editingPayment.salaryType === 'OFFICIAL' ? 'Белая' : 'Чёрная'} ЗП
+              {editingPayment.employee.name} · {editingPayment.salaryType === 'OFFICIAL' ? 'Белая' : editingPayment.salaryType === 'UNOFFICIAL' ? 'Чёрная' : 'Комиссия'} ЗП
             </p>
             <form onSubmit={handleUpdatePayment} className="space-y-4">
               <div>

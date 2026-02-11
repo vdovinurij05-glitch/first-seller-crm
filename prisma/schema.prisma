@@ -274,12 +274,14 @@ model Employee {
   position         String?             // должность
   officialSalary   Float    @default(0) // белая ЗП (оклад)
   unofficialSalary Float    @default(0) // чёрная ЗП
+  salesCommissionPercent Float @default(0) // % комиссии от продаж
   businessUnitId   String?             // привязка к направлению
   businessUnit     BusinessUnit? @relation(fields: [businessUnitId], references: [id])
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   payments         SalaryPayment[]
+  salesRecords     FinanceRecord[]     // доходы, где этот сотрудник — менеджер
 
   @@map("employees")
 }
@@ -371,6 +373,9 @@ model FinanceRecord {
   isPaid      Boolean  @default(true)
   counterparty String?            // контрагент (кому должны / кто должен нам)
   debtType     String?            // "RECEIVABLE" (нам должны) | "PAYABLE" (мы должны) | null (обычная запись)
+  client       String?            // клиент/компания (для доходных записей)
+  salesManagerId String?          // менеджер по продажам
+  salesManager   Employee? @relation(fields: [salesManagerId], references: [id], onDelete: SetNull)
   categoryId  String
   category    FinanceCategory @relation(fields: [categoryId], references: [id])
   businessUnitId String?

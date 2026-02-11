@@ -51,6 +51,12 @@ interface BusinessUnit {
   name: string
 }
 
+interface SalesEmployee {
+  id: string
+  name: string
+  salesCommissionPercent: number
+}
+
 interface FinanceRecord {
   id: string
   amount: number
@@ -61,6 +67,9 @@ interface FinanceRecord {
   isPaid: boolean
   counterparty: string | null
   debtType: string | null
+  client: string | null
+  salesManagerId: string | null
+  salesManager: SalesEmployee | null
   categoryId: string
   businessUnitId: string | null
   category: FinanceCategory
@@ -128,6 +137,7 @@ export default function PnLPage() {
   const [records, setRecords] = useState<FinanceRecord[]>([])
   const [categories, setCategories] = useState<FinanceCategory[]>([])
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([])
+  const [employees, setEmployees] = useState<SalesEmployee[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -156,7 +166,9 @@ export default function PnLPage() {
     categoryId: '',
     businessUnitId: '',
     counterparty: '',
-    debtType: ''
+    debtType: '',
+    client: '',
+    salesManagerId: ''
   })
 
   // Форма категории
@@ -177,11 +189,12 @@ export default function PnLPage() {
     const to = monthEnd.toISOString()
     const buParam = filterBU ? `&businessUnitId=${filterBU}` : ''
 
-    const [recRes, catRes, buRes, sumRes] = await Promise.all([
+    const [recRes, catRes, buRes, sumRes, empRes] = await Promise.all([
       fetch(`/api/pnl?from=${from}&to=${to}${buParam}`),
       fetch('/api/pnl/categories'),
       fetch('/api/pnl/business-units'),
-      fetch(`/api/pnl/summary?from=${from}&to=${to}${buParam}`)
+      fetch(`/api/pnl/summary?from=${from}&to=${to}${buParam}`),
+      fetch('/api/pnl/employees')
     ])
 
     if (recRes.ok) {
@@ -199,6 +212,10 @@ export default function PnLPage() {
     if (sumRes.ok) {
       const data = await sumRes.json()
       setSummary(data)
+    }
+    if (empRes.ok) {
+      const data = await empRes.json()
+      setEmployees(Array.isArray(data) ? data : [])
     }
     setLoading(false)
   }
@@ -300,7 +317,9 @@ export default function PnLPage() {
       categoryId: '',
       businessUnitId: '',
       counterparty: '',
-      debtType: ''
+      debtType: '',
+      client: '',
+      salesManagerId: ''
     })
   }
 
@@ -316,7 +335,9 @@ export default function PnLPage() {
       categoryId: record.categoryId,
       businessUnitId: record.businessUnitId || '',
       counterparty: record.counterparty || '',
-      debtType: record.debtType || ''
+      debtType: record.debtType || '',
+      client: record.client || '',
+      salesManagerId: record.salesManagerId || ''
     })
     setShowAddRecord(true)
   }
@@ -715,6 +736,7 @@ export default function PnLPage() {
                 <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Категория</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Описание</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Направление</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Менеджер</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Статус</th>
                 <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Сумма</th>
                 <th className="px-5 py-3"></th>
@@ -736,6 +758,13 @@ export default function PnLPage() {
                   <td className="px-5 py-3.5 text-sm text-gray-600">{r.description || '—'}</td>
                   <td className="px-5 py-3.5 text-sm text-gray-500">
                     {r.businessUnit?.name || '—'}
+                  </td>
+                  <td className="px-5 py-3.5 text-sm text-gray-500">
+                    {r.salesManager ? (
+                      <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+                        {r.salesManager.name}
+                      </span>
+                    ) : '—'}
                   </td>
                   <td className="px-5 py-3.5">
                     {r.isPaid ? (
@@ -896,6 +925,45 @@ export default function PnLPage() {
                   placeholder="Комментарий..."
                 />
               </div>
+
+              {/* Клиент (только для доходов) */}
+              {form.type === 'INCOME' && (
+                <div>
+                  <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
+                    Клиент
+                    <FieldHint text="Компания или ФИО клиента, от которого получен доход. Используется для отчёта по комиссиям менеджеров." />
+                  </label>
+                  <input
+                    type="text"
+                    value={form.client}
+                    onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="ООО Ромашка..."
+                  />
+                </div>
+              )}
+
+              {/* Менеджер (только для доходов) */}
+              {form.type === 'INCOME' && employees.length > 0 && (
+                <div>
+                  <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
+                    Менеджер
+                    <FieldHint text="Менеджер по продажам, который привёл этот доход. На основе этого поля рассчитывается комиссия с продаж." />
+                  </label>
+                  <select
+                    value={form.salesManagerId}
+                    onChange={e => setForm(f => ({ ...f, salesManagerId: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    <option value="">Не указан</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.salesCommissionPercent}%)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Даты */}
               <div className="grid grid-cols-2 gap-3">

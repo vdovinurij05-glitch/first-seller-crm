@@ -29,7 +29,7 @@ export async function PUT(
 
   const { id } = await params
   const body = await request.json()
-  const { amount, type, description, date, dueDate, isPaid, categoryId, businessUnitId, counterparty, debtType } = body
+  const { amount, type, description, date, dueDate, isPaid, categoryId, businessUnitId, counterparty, debtType, client, salesManagerId } = body
 
   const record = await prisma.financeRecord.update({
     where: { id },
@@ -42,12 +42,15 @@ export async function PUT(
       ...(isPaid !== undefined && { isPaid }),
       ...(counterparty !== undefined && { counterparty: counterparty || null }),
       ...(debtType !== undefined && { debtType: debtType || null }),
+      ...(client !== undefined && { client: client || null }),
+      ...(salesManagerId !== undefined && { salesManagerId: salesManagerId || null }),
       ...(categoryId && { categoryId }),
       ...(businessUnitId !== undefined && { businessUnitId: businessUnitId || null }),
     },
     include: {
       category: true,
-      businessUnit: true
+      businessUnit: true,
+      salesManager: true
     }
   })
 
