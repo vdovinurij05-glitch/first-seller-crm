@@ -815,7 +815,7 @@ export default function PnLPage() {
       {/* Модалка: Добавить/редактировать запись */}
       {showAddRecord && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowAddRecord(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-semibold text-gray-900">
                 {editingRecord ? 'Редактировать запись' : 'Новая запись'}
