@@ -159,6 +159,7 @@ export async function GET(request: NextRequest) {
           type: 'EXPENSE',
           date: { gte: le.effectiveDate },
           paidByFounder: null, // не учитываем расходы оплаченные учредителями из своих
+          founderRepayment: null, // не учитываем возврат долга учредителям
           loanId: null // не учитываем платежи по кредитам (обслуживание долга)
         },
         _sum: { amount: true }
