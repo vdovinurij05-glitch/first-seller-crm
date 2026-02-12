@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get('type') // INCOME | EXPENSE
   const categoryId = searchParams.get('categoryId')
   const businessUnitId = searchParams.get('businessUnitId')
+  const legalEntityId = searchParams.get('legalEntityId')
   const isPaid = searchParams.get('isPaid')
 
   const where: any = {}
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
   if (type) where.type = type
   if (categoryId) where.categoryId = categoryId
   if (businessUnitId) where.businessUnitId = businessUnitId
+  if (legalEntityId) where.legalEntityId = legalEntityId
   if (isPaid !== null && isPaid !== undefined && isPaid !== '') {
     where.isPaid = isPaid === 'true'
   }
@@ -50,6 +52,7 @@ export async function GET(request: NextRequest) {
     include: {
       category: true,
       businessUnit: true,
+      legalEntity: true,
       salesManager: true
     },
     orderBy: { date: 'desc' }
@@ -87,12 +90,14 @@ export async function POST(request: NextRequest) {
       fromSafe: type === 'EXPENSE' ? (body.fromSafe === true) : false,
       categoryId,
       businessUnitId: businessUnitId || null,
+      legalEntityId: body.legalEntityId || null,
       userId: admin.id,
       source: 'MANUAL'
     },
     include: {
       category: true,
       businessUnit: true,
+      legalEntity: true,
       salesManager: true
     }
   })

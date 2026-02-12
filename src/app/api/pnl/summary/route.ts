@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get('from')
   const to = searchParams.get('to')
   const businessUnitId = searchParams.get('businessUnitId')
+  const legalEntityId = searchParams.get('legalEntityId')
 
   // По умолчанию текущий месяц
   const now = new Date()
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
     date: { gte: dateFrom, lte: dateTo }
   }
   if (businessUnitId) where.businessUnitId = businessUnitId
+  if (legalEntityId) where.legalEntityId = legalEntityId
 
   // Все записи за период
   const records = await prisma.financeRecord.findMany({
@@ -110,20 +112,30 @@ export async function GET(request: NextRequest) {
   })
   const totalPayable = payables.reduce((sum, r) => sum + r.amount, 0)
 
-  // Баланс сейфа (глобальный, не зависит от фильтров)
-  const safeSettings = await prisma.safeSettings.findFirst()
-  let safeBalance = 0
-  if (safeSettings) {
+  // Балансы по юрлицам (глобально, не зависит от фильтров месяца)
+  const legalEntities = await prisma.legalEntity.findMany({
+    include: { businessUnit: true }
+  })
+  const safeBalances = await Promise.all(legalEntities.map(async (le) => {
     const safeExpenses = await prisma.financeRecord.aggregate({
       where: {
+        legalEntityId: le.id,
         fromSafe: true,
         type: 'EXPENSE',
-        date: { gte: safeSettings.effectiveDate }
+        date: { gte: le.effectiveDate }
       },
       _sum: { amount: true }
     })
-    safeBalance = safeSettings.initialBalance - (safeExpenses._sum.amount || 0)
-  }
+    return {
+      legalEntityId: le.id,
+      name: le.name,
+      businessUnitName: le.businessUnit.name,
+      initialBalance: le.initialBalance,
+      totalExpenses: safeExpenses._sum.amount || 0,
+      balance: le.initialBalance - (safeExpenses._sum.amount || 0)
+    }
+  }))
+  const safeBalance = safeBalances.reduce((sum, sb) => sum + sb.balance, 0)
 
   return NextResponse.json({
     period: { from: dateFrom, to: dateTo },
@@ -134,6 +146,7 @@ export async function GET(request: NextRequest) {
     totalReceivable,
     totalPayable,
     safeBalance,
+    safeBalances,
     byCategory: Object.values(byCategory),
     byBusinessUnit: Object.values(byBusinessUnit),
     upcomingExpenses,

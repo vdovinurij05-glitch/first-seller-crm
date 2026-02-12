@@ -58,6 +58,16 @@ interface SalesEmployee {
   salesCommissionPercent: number
 }
 
+interface LegalEntity {
+  id: string
+  name: string
+  businessUnitId: string
+  businessUnit: BusinessUnit
+  initialBalance: number
+  effectiveDate: string
+  order: number
+}
+
 interface FinanceRecord {
   id: string
   amount: number
@@ -74,10 +84,21 @@ interface FinanceRecord {
   fromSafe: boolean
   categoryId: string
   businessUnitId: string | null
+  legalEntityId: string | null
   category: FinanceCategory
   businessUnit: BusinessUnit | null
+  legalEntity: LegalEntity | null
   source: string
   createdAt: string
+}
+
+interface SafeBalanceItem {
+  legalEntityId: string
+  name: string
+  businessUnitName: string
+  initialBalance: number
+  totalExpenses: number
+  balance: number
 }
 
 interface Summary {
@@ -88,6 +109,7 @@ interface Summary {
   totalReceivable: number
   totalPayable: number
   safeBalance: number
+  safeBalances: SafeBalanceItem[]
   byCategory: { name: string; group: string | null; income: number; expense: number }[]
   byBusinessUnit: { name: string; income: number; expense: number }[]
   upcomingExpenses: FinanceRecord[]
@@ -141,12 +163,14 @@ export default function PnLPage() {
   const [categories, setCategories] = useState<FinanceCategory[]>([])
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([])
   const [employees, setEmployees] = useState<SalesEmployee[]>([])
+  const [legalEntities, setLegalEntities] = useState<LegalEntity[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Фильтры
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [filterBU, setFilterBU] = useState<string>('')
+  const [filterLE, setFilterLE] = useState<string>('')
   const [filterType, setFilterType] = useState<string>('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
 
@@ -157,11 +181,9 @@ export default function PnLPage() {
   const [showAddBU, setShowAddBU] = useState(false)
   const [showManageBU, setShowManageBU] = useState(false)
   const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null)
-  const [showSafeSettings, setShowSafeSettings] = useState(false)
-  const [safeForm, setSafeForm] = useState({
-    initialBalance: '',
-    effectiveDate: new Date().getFullYear() + '-01-01'
-  })
+  const [showLegalEntities, setShowLegalEntities] = useState(false)
+  const [leForm, setLeForm] = useState({ name: '', businessUnitId: '', initialBalance: '', effectiveDate: new Date().getFullYear() + '-01-01' })
+  const [editingLE, setEditingLE] = useState<LegalEntity | null>(null)
 
   // Форма записи
   const [form, setForm] = useState({
@@ -173,6 +195,7 @@ export default function PnLPage() {
     isPaid: true,
     categoryId: '',
     businessUnitId: '',
+    legalEntityId: '',
     counterparty: '',
     debtType: '',
     client: '',
@@ -190,20 +213,22 @@ export default function PnLPage() {
 
   useEffect(() => {
     fetchAll()
-  }, [currentMonth, filterBU])
+  }, [currentMonth, filterBU, filterLE])
 
   async function fetchAll() {
     setLoading(true)
     const from = monthStart.toISOString()
     const to = monthEnd.toISOString()
     const buParam = filterBU ? `&businessUnitId=${filterBU}` : ''
+    const leParam = filterLE ? `&legalEntityId=${filterLE}` : ''
 
-    const [recRes, catRes, buRes, sumRes, empRes] = await Promise.all([
-      fetch(`/api/pnl?from=${from}&to=${to}${buParam}`),
+    const [recRes, catRes, buRes, sumRes, empRes, leRes] = await Promise.all([
+      fetch(`/api/pnl?from=${from}&to=${to}${buParam}${leParam}`),
       fetch('/api/pnl/categories'),
       fetch('/api/pnl/business-units'),
-      fetch(`/api/pnl/summary?from=${from}&to=${to}${buParam}`),
-      fetch('/api/pnl/employees')
+      fetch(`/api/pnl/summary?from=${from}&to=${to}${buParam}${leParam}`),
+      fetch('/api/pnl/employees'),
+      fetch('/api/pnl/legal-entities')
     ])
 
     if (recRes.ok) {
@@ -225,6 +250,10 @@ export default function PnLPage() {
     if (empRes.ok) {
       const data = await empRes.json()
       setEmployees(Array.isArray(data) ? data : [])
+    }
+    if (leRes.ok) {
+      const data = await leRes.json()
+      setLegalEntities(data.legalEntities || [])
     }
     setLoading(false)
   }
@@ -315,33 +344,31 @@ export default function PnLPage() {
     }
   }
 
-  async function fetchSafeSettings() {
-    const res = await fetch('/api/pnl/safe')
-    if (res.ok) {
-      const data = await res.json()
-      if (data.settings) {
-        setSafeForm({
-          initialBalance: String(data.settings.initialBalance),
-          effectiveDate: data.settings.effectiveDate.split('T')[0]
-        })
-      }
-    }
-  }
-
-  async function handleSubmitSafeSettings(e: React.FormEvent) {
+  async function handleSubmitLE(e: React.FormEvent) {
     e.preventDefault()
-    const res = await fetch('/api/pnl/safe', {
-      method: 'POST',
+    const url = editingLE ? `/api/pnl/legal-entities/${editingLE.id}` : '/api/pnl/legal-entities'
+    const method = editingLE ? 'PUT' : 'POST'
+    const res = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        initialBalance: parseFloat(safeForm.initialBalance),
-        effectiveDate: safeForm.effectiveDate
+        name: leForm.name,
+        businessUnitId: leForm.businessUnitId,
+        initialBalance: parseFloat(leForm.initialBalance) || 0,
+        effectiveDate: leForm.effectiveDate
       })
     })
     if (res.ok) {
-      setShowSafeSettings(false)
+      setLeForm({ name: '', businessUnitId: '', initialBalance: '', effectiveDate: new Date().getFullYear() + '-01-01' })
+      setEditingLE(null)
       fetchAll()
     }
+  }
+
+  async function handleDeleteLE(id: string, name: string) {
+    if (!confirm(`Удалить юр.лицо "${name}"? Записи будут отвязаны.`)) return
+    const res = await fetch(`/api/pnl/legal-entities/${id}`, { method: 'DELETE' })
+    if (res.ok) fetchAll()
   }
 
   function resetForm() {
@@ -354,6 +381,7 @@ export default function PnLPage() {
       isPaid: true,
       categoryId: '',
       businessUnitId: '',
+      legalEntityId: '',
       counterparty: '',
       debtType: '',
       client: '',
@@ -373,6 +401,7 @@ export default function PnLPage() {
       isPaid: record.isPaid,
       categoryId: record.categoryId,
       businessUnitId: record.businessUnitId || '',
+      legalEntityId: record.legalEntityId || '',
       counterparty: record.counterparty || '',
       debtType: record.debtType || '',
       client: record.client || '',
@@ -485,13 +514,27 @@ export default function PnLPage() {
           {businessUnits.length > 0 && (
             <select
               value={filterBU}
-              onChange={e => setFilterBU(e.target.value)}
+              onChange={e => { setFilterBU(e.target.value); setFilterLE('') }}
               className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white"
             >
               <option value="">Все направления</option>
               {businessUnits.map(bu => (
                 <option key={bu.id} value={bu.id}>{bu.name}</option>
               ))}
+            </select>
+          )}
+          {legalEntities.filter(le => !filterBU || le.businessUnitId === filterBU).length > 0 && (
+            <select
+              value={filterLE}
+              onChange={e => setFilterLE(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white"
+            >
+              <option value="">Все юр.лица</option>
+              {legalEntities
+                .filter(le => !filterBU || le.businessUnitId === filterBU)
+                .map(le => (
+                  <option key={le.id} value={le.id}>{le.name}</option>
+                ))}
             </select>
           )}
           <div className="flex border border-gray-200 rounded-lg overflow-hidden">
@@ -575,10 +618,7 @@ export default function PnLPage() {
           {/* Сейф */}
           <div
             className="rounded-2xl border p-5 hover:shadow-md transition cursor-pointer bg-gradient-to-br from-violet-50 to-purple-50 border-violet-100"
-            onClick={() => {
-              fetchSafeSettings()
-              setShowSafeSettings(true)
-            }}
+            onClick={() => setShowLegalEntities(true)}
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Сейф</span>
@@ -591,7 +631,17 @@ export default function PnLPage() {
             }`}>
               {formatMoney(summary.safeBalance)}
             </p>
-            <p className="text-xs text-gray-400 mt-1">Нажмите для настройки</p>
+            {summary.safeBalances && summary.safeBalances.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {summary.safeBalances.map(sb => (
+                  <div key={sb.legalEntityId} className="flex justify-between text-xs">
+                    <span className="text-gray-500 truncate">{sb.name}</span>
+                    <span className={sb.balance >= 0 ? 'text-violet-600' : 'text-red-500'}>{formatMoney(sb.balance)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-gray-400 mt-1">Юр.лица</p>
           </div>
         </div>
       )}
@@ -819,7 +869,10 @@ export default function PnLPage() {
                   </td>
                   <td className="px-5 py-3.5 text-sm text-gray-600">{r.description || '—'}</td>
                   <td className="px-5 py-3.5 text-sm text-gray-500">
-                    {r.businessUnit?.name || '—'}
+                    <div>{r.businessUnit?.name || '—'}</div>
+                    {r.legalEntity && (
+                      <div className="text-xs text-gray-400">{r.legalEntity.name}</div>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-gray-500">
                     {r.salesManager ? (
@@ -975,6 +1028,28 @@ export default function PnLPage() {
                     {businessUnits.map(bu => (
                       <option key={bu.id} value={bu.id}>{bu.name}</option>
                     ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Юр.лицо (каскадно от направления) */}
+              {legalEntities.filter(le => !form.businessUnitId || le.businessUnitId === form.businessUnitId).length > 0 && (
+                <div>
+                  <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
+                    Юр.лицо
+                    <FieldHint text="Юридическое лицо, к которому относится операция. Список зависит от выбранного направления." />
+                  </label>
+                  <select
+                    value={form.legalEntityId}
+                    onChange={e => setForm(f => ({ ...f, legalEntityId: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">Не указано</option>
+                    {legalEntities
+                      .filter(le => !form.businessUnitId || le.businessUnitId === form.businessUnitId)
+                      .map(le => (
+                        <option key={le.id} value={le.id}>{le.name}</option>
+                      ))}
                   </select>
                 </div>
               )}
@@ -1352,57 +1427,160 @@ export default function PnLPage() {
         </div>
       )}
 
-      {/* Модалка: Настройки сейфа */}
-      {showSafeSettings && (
+      {/* Модалка: Юр.лица (сейф) */}
+      {showLegalEntities && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4"
-          onClick={() => setShowSafeSettings(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl"
+          onClick={() => setShowLegalEntities(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-gray-900">Настройки сейфа</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Юр.лица и сейф</h2>
               <button
-                onClick={() => setShowSafeSettings(false)}
+                onClick={() => setShowLegalEntities(false)}
                 className="p-1 hover:bg-gray-100 rounded-lg"
               >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <form onSubmit={handleSubmitSafeSettings} className="space-y-4">
-              <div>
-                <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
-                  Начальный баланс
-                  <FieldHint text="Сумма наличных в сейфе на дату начала учёта. Все расходы с отметкой «Из сейфа» будут вычитаться из этой суммы." />
-                </label>
+
+            {/* Суммарный баланс */}
+            <div className="bg-violet-50 rounded-xl p-4 mb-5">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-700">Общий баланс сейфа</span>
+                <span className={`text-xl font-bold ${(summary?.safeBalance ?? 0) >= 0 ? 'text-violet-700' : 'text-red-600'}`}>
+                  {formatMoney(summary?.safeBalance ?? 0)}
+                </span>
+              </div>
+            </div>
+
+            {/* Список юрлиц */}
+            <div className="space-y-3 mb-5">
+              {legalEntities.length === 0 ? (
+                <p className="text-sm text-gray-400 italic text-center py-4">Нет юр.лиц. Добавьте первое.</p>
+              ) : (
+                legalEntities.map(le => {
+                  const sb = summary?.safeBalances?.find(s => s.legalEntityId === le.id)
+                  return (
+                    <div key={le.id} className="border border-gray-100 rounded-xl p-4 hover:border-violet-200 transition group">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">{le.name}</span>
+                          <span className="text-xs text-gray-400 ml-2">{le.businessUnit?.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                          <button
+                            onClick={() => {
+                              setEditingLE(le)
+                              setLeForm({
+                                name: le.name,
+                                businessUnitId: le.businessUnitId,
+                                initialBalance: String(le.initialBalance),
+                                effectiveDate: le.effectiveDate.split('T')[0]
+                              })
+                            }}
+                            className="p-1.5 hover:bg-indigo-50 rounded-lg"
+                          >
+                            <Edit className="w-3.5 h-3.5 text-indigo-600" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLE(le.id, le.name)}
+                            className="p-1.5 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-400">Начальный</span>
+                          <p className="font-medium text-gray-700">{formatMoney(sb?.initialBalance ?? le.initialBalance)}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Расходы</span>
+                          <p className="font-medium text-red-500">{formatMoney(sb?.totalExpenses ?? 0)}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Остаток</span>
+                          <p className={`font-medium ${(sb?.balance ?? 0) >= 0 ? 'text-violet-700' : 'text-red-600'}`}>
+                            {formatMoney(sb?.balance ?? le.initialBalance)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Форма добавления/редактирования */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">
+                {editingLE ? 'Редактировать юр.лицо' : 'Добавить юр.лицо'}
+              </h3>
+              <form onSubmit={handleSubmitLE} className="space-y-3">
                 <input
-                  type="number"
-                  step="0.01"
-                  value={safeForm.initialBalance}
-                  onChange={e => setSafeForm(f => ({ ...f, initialBalance: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-lg font-semibold focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                  placeholder="0"
+                  type="text"
+                  value={leForm.name}
+                  onChange={e => setLeForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500"
+                  placeholder="Название (ИП Гвоздков, ООО Первый Селлер...)"
                   required
                 />
-              </div>
-              <div>
-                <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
-                  Дата начала учёта
-                  <FieldHint text="Дата, с которой начинается учёт расходов из сейфа. Обычно это 1 января текущего года." />
-                </label>
-                <input
-                  type="date"
-                  value={safeForm.effectiveDate}
-                  onChange={e => setSafeForm(f => ({ ...f, effectiveDate: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500"
+                <select
+                  value={leForm.businessUnitId}
+                  onChange={e => setLeForm(f => ({ ...f, businessUnitId: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500"
                   required
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition"
-              >
-                Сохранить
-              </button>
-            </form>
+                >
+                  <option value="">Направление...</option>
+                  {businessUnits.map(bu => (
+                    <option key={bu.id} value={bu.id}>{bu.name}</option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Начальный баланс</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={leForm.initialBalance}
+                      onChange={e => setLeForm(f => ({ ...f, initialBalance: e.target.value }))}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Дата начала</label>
+                    <input
+                      type="date"
+                      value={leForm.effectiveDate}
+                      onChange={e => setLeForm(f => ({ ...f, effectiveDate: e.target.value }))}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition"
+                  >
+                    {editingLE ? 'Сохранить' : 'Добавить'}
+                  </button>
+                  {editingLE && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingLE(null)
+                        setLeForm({ name: '', businessUnitId: '', initialBalance: '', effectiveDate: new Date().getFullYear() + '-01-01' })
+                      }}
+                      className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition"
+                    >
+                      Отмена
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

@@ -343,10 +343,27 @@ model BusinessUnit {
   name      String                // "Агентство Первый Селлер", "Банкротство"...
   order     Int      @default(0)
   createdAt DateTime @default(now())
-  records   FinanceRecord[]
-  employees Employee[]
+  records       FinanceRecord[]
+  employees     Employee[]
+  legalEntities LegalEntity[]
 
   @@map("business_units")
+}
+
+// Юридические лица (суб-сущности направлений)
+model LegalEntity {
+  id             String   @id @default(cuid())
+  name           String              // "ИП Гвоздков", "ООО Первый Селлер"
+  businessUnitId String
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id], onDelete: Cascade)
+  initialBalance Float    @default(0) // начальный остаток на начало учёта
+  effectiveDate  DateTime @default(now()) // дата начала учёта
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  records        FinanceRecord[]
+
+  @@map("legal_entities")
 }
 
 // Категории финансов (P&L)
@@ -380,6 +397,8 @@ model FinanceRecord {
   category    FinanceCategory @relation(fields: [categoryId], references: [id])
   businessUnitId String?
   businessUnit   BusinessUnit? @relation(fields: [businessUnitId], references: [id])
+  legalEntityId  String?
+  legalEntity    LegalEntity? @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   userId      String?             // кто создал запись
   fromSafe    Boolean  @default(false)     // оплата из сейфа (наличных)
   source      String   @default("MANUAL") // "MANUAL" | "BANK" | "EXCEL" | "TELEGRAM"

@@ -47,10 +47,12 @@ export async function PUT(
       ...(body.fromSafe !== undefined && { fromSafe: body.fromSafe === true }),
       ...(categoryId && { categoryId }),
       ...(businessUnitId !== undefined && { businessUnitId: businessUnitId || null }),
+      ...(body.legalEntityId !== undefined && { legalEntityId: body.legalEntityId || null }),
     },
     include: {
       category: true,
       businessUnit: true,
+      legalEntity: true,
       salesManager: true
     }
   })
