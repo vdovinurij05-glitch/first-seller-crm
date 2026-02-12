@@ -76,6 +76,7 @@ interface FinanceRecord {
   salesManager: SalesEmployee | null
   fromSafe: boolean
   paidByFounder: string | null
+  founderRepayment: string | null
   categoryId: string
   businessUnitId: string | null
   legalEntityId: string | null
@@ -197,7 +198,8 @@ export default function PnLPage() {
     client: '',
     salesManagerId: '',
     fromSafe: false,
-    paidByFounder: ''
+    paidByFounder: '',
+    founderRepayment: ''
   })
 
   // Форма категории
@@ -384,7 +386,8 @@ export default function PnLPage() {
       client: '',
       salesManagerId: '',
       fromSafe: false,
-      paidByFounder: ''
+      paidByFounder: '',
+      founderRepayment: ''
     })
   }
 
@@ -405,7 +408,8 @@ export default function PnLPage() {
       client: record.client || '',
       salesManagerId: record.salesManagerId || '',
       fromSafe: record.fromSafe || false,
-      paidByFounder: record.paidByFounder || ''
+      paidByFounder: record.paidByFounder || '',
+      founderRepayment: record.founderRepayment || ''
     })
     setShowAddRecord(true)
   }
@@ -917,6 +921,9 @@ export default function PnLPage() {
                     {r.paidByFounder && (
                       <div className="text-xs text-violet-500">Оплатил: {r.paidByFounder}</div>
                     )}
+                    {r.founderRepayment && (
+                      <div className="text-xs text-emerald-500">Возврат: {r.founderRepayment}</div>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-gray-500">
                     {r.salesManager ? (
@@ -1146,8 +1153,8 @@ export default function PnLPage() {
                 </div>
               )}
 
-              {/* Оплатил из своих средств (только расходы) */}
-              {form.type === 'EXPENSE' && (
+              {/* Оплатил из своих / Возврат учредителю (только расходы) */}
+              {form.type === 'EXPENSE' && !form.founderRepayment && (
                 <div>
                   <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
                     Оплатил из своих средств
@@ -1159,6 +1166,23 @@ export default function PnLPage() {
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   >
                     <option value="">Нет (из средств компании)</option>
+                    <option value="Юрий">Юрий</option>
+                    <option value="Дмитрий">Дмитрий</option>
+                  </select>
+                </div>
+              )}
+              {form.type === 'EXPENSE' && !form.paidByFounder && (
+                <div>
+                  <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
+                    Возврат учредителю
+                    <FieldHint text="Если это возврат долга учредителю — выберите кому. Деньги уйдут со счёта юрлица, задолженность уменьшится. В P&L не попадёт." />
+                  </label>
+                  <select
+                    value={form.founderRepayment}
+                    onChange={e => setForm(f => ({ ...f, founderRepayment: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    <option value="">Нет</option>
                     <option value="Юрий">Юрий</option>
                     <option value="Дмитрий">Дмитрий</option>
                   </select>

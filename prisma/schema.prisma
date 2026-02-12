@@ -401,7 +401,8 @@ model FinanceRecord {
   legalEntity    LegalEntity? @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   userId      String?             // кто создал запись
   fromSafe    Boolean  @default(false)     // оплата из сейфа (наличных)
-  paidByFounder String?                   // "Юрий" | "Дмитрий" — оплачено из личных средств учредителя
+  paidByFounder    String?                // "Юрий" | "Дмитрий" — оплачено из личных средств учредителя
+  founderRepayment String?                // "Юрий" | "Дмитрий" — возврат долга учредителю
   source      String   @default("MANUAL") // "MANUAL" | "BANK" | "EXCEL" | "TELEGRAM"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

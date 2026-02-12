@@ -54,6 +54,9 @@ export async function GET(request: NextRequest) {
   const byBusinessUnit: Record<string, { name: string; income: number; expense: number }> = {}
 
   for (const r of records) {
+    // Возвраты учредителям не считаются бизнес-расходами (это погашение долга)
+    if (r.founderRepayment) continue
+
     if (r.type === 'INCOME') totalIncome += r.amount
     else totalExpense += r.amount
 
@@ -113,16 +116,28 @@ export async function GET(request: NextRequest) {
   const totalPayable = payables.reduce((sum, r) => sum + r.amount, 0)
 
   // Задолженность компании перед учредителями (всё время, не за период)
-  const founderExpenses = await prisma.financeRecord.findMany({
-    where: { paidByFounder: { not: null } },
-    select: { paidByFounder: true, amount: true }
-  })
+  const [founderExpenses, founderRepayments] = await Promise.all([
+    prisma.financeRecord.findMany({
+      where: { paidByFounder: { not: null } },
+      select: { paidByFounder: true, amount: true }
+    }),
+    prisma.financeRecord.findMany({
+      where: { founderRepayment: { not: null } },
+      select: { founderRepayment: true, amount: true }
+    })
+  ])
   const founderDebts: Record<string, number> = {}
   for (const r of founderExpenses) {
     const name = r.paidByFounder!
     founderDebts[name] = (founderDebts[name] || 0) + r.amount
   }
-  const founderDebtsArray = Object.entries(founderDebts).map(([name, amount]) => ({ name, amount }))
+  for (const r of founderRepayments) {
+    const name = r.founderRepayment!
+    founderDebts[name] = (founderDebts[name] || 0) - r.amount
+  }
+  const founderDebtsArray = Object.entries(founderDebts)
+    .filter(([, amount]) => Math.abs(amount) > 0.01)
+    .map(([name, amount]) => ({ name, amount }))
 
   // Текущий остаток по юрлицам: начальный + доходы − расходы (с effectiveDate)
   const legalEntities = await prisma.legalEntity.findMany({

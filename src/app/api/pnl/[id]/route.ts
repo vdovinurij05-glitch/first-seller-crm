@@ -46,6 +46,7 @@ export async function PUT(
       ...(salesManagerId !== undefined && { salesManagerId: salesManagerId || null }),
       ...(body.fromSafe !== undefined && { fromSafe: body.fromSafe === true }),
       ...(body.paidByFounder !== undefined && { paidByFounder: body.paidByFounder || null }),
+      ...(body.founderRepayment !== undefined && { founderRepayment: body.founderRepayment || null }),
       ...(categoryId && { categoryId }),
       ...(businessUnitId !== undefined && { businessUnitId: businessUnitId || null }),
       ...(body.legalEntityId !== undefined && { legalEntityId: body.legalEntityId || null }),
