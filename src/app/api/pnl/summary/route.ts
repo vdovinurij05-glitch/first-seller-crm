@@ -56,6 +56,8 @@ export async function GET(request: NextRequest) {
   for (const r of records) {
     // Возвраты учредителям не считаются бизнес-расходами (это погашение долга)
     if (r.founderRepayment) continue
+    // Платежи по кредитам учитываются в разделе Кредиты, не в P&L расходах
+    if (r.loanId) continue
 
     if (r.type === 'INCOME') totalIncome += r.amount
     else totalExpense += r.amount
@@ -78,19 +80,16 @@ export async function GET(request: NextRequest) {
     else byBusinessUnit[buKey].expense += r.amount
   }
 
-  // Предстоящие неоплаченные расходы за текущий месяц
-  const nowDate = new Date()
-  const monthStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1)
-  const monthEnd = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0, 23, 59, 59, 999)
+  // Предстоящие неоплаченные расходы за выбранный период
   const upcomingExpenses = await prisma.financeRecord.findMany({
     where: {
       isPaid: false,
       type: 'EXPENSE',
-      dueDate: { gte: monthStart, lte: monthEnd },
+      date: { gte: dateFrom, lte: dateTo },
       ...(businessUnitId && { businessUnitId })
     },
     include: { category: true, businessUnit: true },
-    orderBy: { dueDate: 'asc' }
+    orderBy: { date: 'asc' }
   })
 
   const totalUnpaid = upcomingExpenses.reduce((sum, r) => sum + r.amount, 0)
