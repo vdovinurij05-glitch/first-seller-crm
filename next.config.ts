@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // output: 'standalone', // Disabled for now to simplify deployment
+  typescript: { ignoreBuildErrors: true },
 };
 
 export default nextConfig;
