@@ -26,11 +26,6 @@ import {
   HelpCircle
 } from 'lucide-react'
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   PieChart,
@@ -702,50 +697,67 @@ export default function PnLPage() {
         </div>
       )}
 
-      {/* Графики */}
-      {summary && (expenseChartData.length > 0 || buChartData.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Расходы по категориям */}
-          {expenseChartData.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <h3 className="text-sm font-medium text-gray-900 mb-4">Расходы по категориям</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={expenseChartData} layout="vertical" margin={{ left: 0, right: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}к`} fontSize={12} />
-                  <YAxis type="category" dataKey="name" width={120} fontSize={12} />
-                  <Tooltip formatter={(v) => formatMoney(Number(v))} />
-                  <Bar dataKey="expense" fill="#6366f1" radius={[0, 6, 6, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+      {/* Расходы по категориям — полная ширина */}
+      {summary && expenseChartData.length > 0 && (() => {
+        const totalExpense = expenseChartData.reduce((s, c) => s + c.expense, 0)
+        return (
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-medium text-gray-900">Расходы по категориям</h3>
+              <span className="text-sm text-gray-500">Итого: <span className="font-bold text-red-500">{formatMoney(totalExpense)}</span></span>
             </div>
-          )}
+            <div className="space-y-3">
+              {expenseChartData.map((cat, i) => {
+                const pct = totalExpense > 0 ? (cat.expense / totalExpense) * 100 : 0
+                return (
+                  <div key={cat.name} className="group">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-gray-700 truncate mr-3">{cat.name}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs text-gray-400">{pct.toFixed(1)}%</span>
+                        <span className="text-sm font-semibold text-gray-900 w-28 text-right">{formatMoney(cat.expense)}</span>
+                      </div>
+                    </div>
+                    <div className="h-5 bg-gray-50 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.max(pct, 0.5)}%`,
+                          backgroundColor: COLORS[i % COLORS.length]
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
-          {/* По направлениям */}
-          {buChartData.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <h3 className="text-sm font-medium text-gray-900 mb-4">По направлениям</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={buChartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    dataKey="value"
-                    label={(props) => `${props.name ?? ''} ${(((props.percent as number) ?? 0) * 100).toFixed(0)}%`}
-                    fontSize={12}
-                  >
-                    {buChartData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v) => formatMoney(Number(v))} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+      {/* По направлениям — pie chart */}
+      {summary && buChartData.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <h3 className="text-sm font-medium text-gray-900 mb-4">По направлениям</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart>
+              <Pie
+                data={buChartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={100}
+                dataKey="value"
+                label={(props) => `${props.name ?? ''} ${(((props.percent as number) ?? 0) * 100).toFixed(0)}%`}
+                fontSize={12}
+              >
+                {buChartData.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(v) => formatMoney(Number(v))} />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
       )}
 
