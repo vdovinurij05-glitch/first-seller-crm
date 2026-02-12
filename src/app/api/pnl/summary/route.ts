@@ -140,6 +140,20 @@ export async function GET(request: NextRequest) {
     .map(([name, amount]) => ({ name, amount }))
 
   // Текущий остаток по юрлицам: начальный + доходы − расходы (с effectiveDate)
+  // Категории кредитов/лизинга исключаем из баланса (обслуживание долга не уменьшает операционный остаток)
+  const loanCategories = await prisma.financeCategory.findMany({
+    where: {
+      OR: [
+        { name: { contains: 'Кредит' } },
+        { name: { contains: 'кредит' } },
+        { name: { contains: 'Лизинг' } },
+        { name: { contains: 'лизинг' } },
+      ]
+    },
+    select: { id: true }
+  })
+  const loanCategoryIds = loanCategories.map(c => c.id)
+
   const legalEntities = await prisma.legalEntity.findMany({
     include: { businessUnit: true }
   })
@@ -158,7 +172,8 @@ export async function GET(request: NextRequest) {
           legalEntityId: le.id,
           type: 'EXPENSE',
           date: { gte: le.effectiveDate },
-          paidByFounder: null // не учитываем расходы оплаченные учредителями из своих
+          paidByFounder: null, // не учитываем расходы оплаченные учредителями из своих
+          categoryId: { notIn: loanCategoryIds } // не учитываем кредитные/лизинговые платежи
         },
         _sum: { amount: true }
       })
