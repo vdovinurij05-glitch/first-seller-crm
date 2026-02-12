@@ -78,12 +78,15 @@ export async function GET(request: NextRequest) {
     else byBusinessUnit[buKey].expense += r.amount
   }
 
-  // Предстоящие неоплаченные расходы (dueDate в будущем), кроме кредитных платежей
+  // Предстоящие неоплаченные расходы за текущий месяц
+  const nowDate = new Date()
+  const monthStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1)
+  const monthEnd = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0, 23, 59, 59, 999)
   const upcomingExpenses = await prisma.financeRecord.findMany({
     where: {
       isPaid: false,
       type: 'EXPENSE',
-      loanId: null, // кредитные платежи показываются в разделе Кредиты
+      dueDate: { gte: monthStart, lte: monthEnd },
       ...(businessUnitId && { businessUnitId })
     },
     include: { category: true, businessUnit: true },
