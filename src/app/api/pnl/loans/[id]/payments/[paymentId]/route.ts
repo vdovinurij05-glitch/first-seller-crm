@@ -46,6 +46,25 @@ export async function PUT(
     data
   })
 
+  // Синхронизировать isPaid в FinanceRecord (PnL календарь)
+  if (body.isPaid !== undefined) {
+    const { id: loanId } = await params
+    // Находим FinanceRecord по loanId и дате платежа
+    const fr = await prisma.financeRecord.findFirst({
+      where: {
+        loanId,
+        amount: payment.amount,
+        date: payment.date
+      }
+    })
+    if (fr) {
+      await prisma.financeRecord.update({
+        where: { id: fr.id },
+        data: { isPaid: body.isPaid }
+      })
+    }
+  }
+
   return NextResponse.json({ payment })
 }
 
