@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
       client: client || null,
       salesManagerId: salesManagerId || null,
       fromSafe: type === 'EXPENSE' ? (body.fromSafe === true) : false,
+      paidByFounder: body.paidByFounder || null,
       categoryId,
       businessUnitId: businessUnitId || null,
       legalEntityId: body.legalEntityId || null,

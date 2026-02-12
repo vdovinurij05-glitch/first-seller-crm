@@ -75,6 +75,7 @@ interface FinanceRecord {
   salesManagerId: string | null
   salesManager: SalesEmployee | null
   fromSafe: boolean
+  paidByFounder: string | null
   categoryId: string
   businessUnitId: string | null
   legalEntityId: string | null
@@ -104,6 +105,7 @@ interface Summary {
   totalPayable: number
   totalBalance: number
   accountBalances: AccountBalanceItem[]
+  founderDebts: { name: string; amount: number }[]
   byCategory: { name: string; group: string | null; income: number; expense: number }[]
   byBusinessUnit: { name: string; income: number; expense: number }[]
   upcomingExpenses: FinanceRecord[]
@@ -194,7 +196,8 @@ export default function PnLPage() {
     debtType: '',
     client: '',
     salesManagerId: '',
-    fromSafe: false
+    fromSafe: false,
+    paidByFounder: ''
   })
 
   // Форма категории
@@ -380,7 +383,8 @@ export default function PnLPage() {
       debtType: '',
       client: '',
       salesManagerId: '',
-      fromSafe: false
+      fromSafe: false,
+      paidByFounder: ''
     })
   }
 
@@ -400,7 +404,8 @@ export default function PnLPage() {
       debtType: record.debtType || '',
       client: record.client || '',
       salesManagerId: record.salesManagerId || '',
-      fromSafe: record.fromSafe || false
+      fromSafe: record.fromSafe || false,
+      paidByFounder: record.paidByFounder || ''
     })
     setShowAddRecord(true)
   }
@@ -697,6 +702,31 @@ export default function PnLPage() {
         </div>
       )}
 
+      {/* Задолженность перед учредителями */}
+      {summary && summary.founderDebts && summary.founderDebts.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
+              <Users className="w-4 h-4 text-violet-600" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase">Задолженность перед учредителями</p>
+              <p className="text-xl font-bold text-violet-600">
+                {formatMoney(summary.founderDebts.reduce((s, d) => s + d.amount, 0))}
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {summary.founderDebts.map(d => (
+              <div key={d.name} className="flex items-center justify-between bg-violet-50/50 rounded-xl px-4 py-3">
+                <span className="text-sm font-medium text-gray-900">{d.name}</span>
+                <span className="text-sm font-bold text-violet-600">{formatMoney(d.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Расходы по категориям — полная ширина */}
       {summary && expenseChartData.length > 0 && (() => {
         const totalExpense = expenseChartData.reduce((s, c) => s + c.expense, 0)
@@ -883,6 +913,9 @@ export default function PnLPage() {
                     <div>{r.businessUnit?.name || '—'}</div>
                     {r.legalEntity && (
                       <div className="text-xs text-gray-400">{r.legalEntity.name}</div>
+                    )}
+                    {r.paidByFounder && (
+                      <div className="text-xs text-violet-500">Оплатил: {r.paidByFounder}</div>
                     )}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-gray-500">
@@ -1109,6 +1142,25 @@ export default function PnLPage() {
                         {emp.name} ({emp.salesCommissionPercent}%)
                       </option>
                     ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Оплатил из своих средств (только расходы) */}
+              {form.type === 'EXPENSE' && (
+                <div>
+                  <label className="flex items-center text-xs font-medium text-gray-500 mb-1">
+                    Оплатил из своих средств
+                    <FieldHint text="Если расход оплачен из личных средств учредителя, выберите кто оплатил. Компания будет должна эту сумму учредителю." />
+                  </label>
+                  <select
+                    value={form.paidByFounder}
+                    onChange={e => setForm(f => ({ ...f, paidByFounder: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    <option value="">Нет (из средств компании)</option>
+                    <option value="Юрий">Юрий</option>
+                    <option value="Дмитрий">Дмитрий</option>
                   </select>
                 </div>
               )}

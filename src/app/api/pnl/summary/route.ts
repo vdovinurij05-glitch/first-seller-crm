@@ -112,6 +112,18 @@ export async function GET(request: NextRequest) {
   })
   const totalPayable = payables.reduce((sum, r) => sum + r.amount, 0)
 
+  // Задолженность компании перед учредителями (всё время, не за период)
+  const founderExpenses = await prisma.financeRecord.findMany({
+    where: { paidByFounder: { not: null } },
+    select: { paidByFounder: true, amount: true }
+  })
+  const founderDebts: Record<string, number> = {}
+  for (const r of founderExpenses) {
+    const name = r.paidByFounder!
+    founderDebts[name] = (founderDebts[name] || 0) + r.amount
+  }
+  const founderDebtsArray = Object.entries(founderDebts).map(([name, amount]) => ({ name, amount }))
+
   // Текущий остаток по юрлицам: начальный + доходы − расходы (с effectiveDate)
   const legalEntities = await prisma.legalEntity.findMany({
     include: { businessUnit: true }
@@ -159,6 +171,7 @@ export async function GET(request: NextRequest) {
     totalPayable,
     totalBalance,
     accountBalances,
+    founderDebts: founderDebtsArray,
     byCategory: Object.values(byCategory),
     byBusinessUnit: Object.values(byBusinessUnit),
     upcomingExpenses,
