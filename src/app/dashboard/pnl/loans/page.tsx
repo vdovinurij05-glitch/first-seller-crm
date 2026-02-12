@@ -349,13 +349,17 @@ export default function LoansPage() {
         {loans.length > 0 ? loans.map(loan => {
           const lt = LOAN_TYPES[loan.loanType] || LOAN_TYPES.LOAN
           const Icon = lt.icon
-          const progress = loan.totalAmount > 0 ? ((loan.totalAmount - loan.remainingAmount) / loan.totalAmount) * 100 : 0
           const isExpanded = expandedLoan === loan.id
           const st = SCHEDULE_TYPES[loan.scheduleType] || SCHEDULE_TYPES.MANUAL
           const now = new Date()
           const overduePayments = loan.payments.filter(p => !p.isPaid && new Date(p.date) < now)
           const paidPayments = loan.payments.filter(p => p.isPaid)
           const upcomingPayments = loan.payments.filter(p => !p.isPaid && new Date(p.date) >= now)
+
+          // Прогресс по фактическим платежам
+          const totalPaymentsSum = loan.payments.reduce((s, p) => s + p.amount, 0)
+          const paidPaymentsSum = paidPayments.reduce((s, p) => s + p.amount, 0)
+          const progress = totalPaymentsSum > 0 ? (paidPaymentsSum / totalPaymentsSum) * 100 : 0
 
           return (
             <div key={loan.id} className="bg-white rounded-2xl border border-gray-100 hover:shadow-md transition overflow-hidden">
@@ -402,8 +406,8 @@ export default function LoansPage() {
                 {/* Прогресс-бар */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                    <span>Погашено {Math.round(progress)}%</span>
-                    <span>Остаток: {formatMoney(loan.remainingAmount)}</span>
+                    <span>Оплачено {paidPayments.length} из {loan.payments.length} платежей ({Math.round(progress)}%)</span>
+                    <span>{formatMoney(paidPaymentsSum)} из {formatMoney(totalPaymentsSum)}</span>
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-2">
                     <div
@@ -412,7 +416,10 @@ export default function LoansPage() {
                     />
                   </div>
                   <div className="flex items-center justify-between text-xs text-gray-400 mt-1">
-                    <span>Взято: {formatMoney(loan.totalAmount)}</span>
+                    <span className="flex items-center">
+                      Тело кредита: {formatMoney(loan.remainingAmount)}
+                      <FieldHint text="Остаток по телу кредита из банковского приложения. Разбивка тело/проценты в каждом платеже не учитывается — это связано с особенностями условий по взятым кредитам." />
+                    </span>
                     {loan.endDate && <span>До: {formatDate(loan.endDate)}</span>}
                   </div>
                 </div>
