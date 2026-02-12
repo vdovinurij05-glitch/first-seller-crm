@@ -408,6 +408,7 @@ model FinanceRecord {
   fromSafe    Boolean  @default(false)     // оплата из сейфа (наличных)
   paidByFounder    String?                // "Юрий" | "Дмитрий" — оплачено из личных средств учредителя
   founderRepayment String?                // "Юрий" | "Дмитрий" — возврат долга учредителю
+  loanId           String?                // привязка к займу (платежи по кредиту — не уменьшают баланс)
   source      String   @default("MANUAL") // "MANUAL" | "BANK" | "EXCEL" | "TELEGRAM"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
