@@ -307,10 +307,12 @@ model Loan {
   id             String   @id @default(cuid())
   name           String              // "Кредит Сбер", "Лизинг авто", "Займ от ИП"
   loanType       String              // "CREDIT" | "LEASING" | "LOAN"
+  scheduleType   String   @default("MANUAL") // "ANNUITY" | "DIFFERENTIATED" | "INTEREST_ONLY" | "MANUAL"
   totalAmount    Float               // общая сумма займа
   remainingAmount Float              // остаток долга
   monthlyPayment Float               // ежемесячный платёж
-  interestRate   Float?              // ставка %
+  interestRate   Float?              // ставка % годовых
+  totalMonths    Int?                // срок в месяцах
   paymentDay     Int      @default(1) // число месяца оплаты
   startDate      DateTime            // дата оформления
   endDate        DateTime?           // дата окончания
@@ -325,14 +327,17 @@ model Loan {
 
 // Платежи по займам
 model LoanPayment {
-  id       String   @id @default(cuid())
-  loanId   String
-  loan     Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  amount   Float
-  date     DateTime
-  isPaid   Boolean  @default(false)
-  comment  String?
-  createdAt DateTime @default(now())
+  id             String    @id @default(cuid())
+  loanId         String
+  loan           Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  amount         Float
+  principalPart  Float?              // часть тела
+  interestPart   Float?              // часть процентов
+  date           DateTime
+  isPaid         Boolean   @default(false)
+  paidAt         DateTime?           // дата фактической оплаты
+  comment        String?
+  createdAt      DateTime  @default(now())
 
   @@map("loan_payments")
 }

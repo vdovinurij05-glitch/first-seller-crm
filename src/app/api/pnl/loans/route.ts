@@ -31,21 +31,55 @@ export async function GET(request: NextRequest) {
     where: activeOnly ? { isActive: true } : undefined,
     include: {
       payments: {
-        orderBy: { date: 'desc' },
-        take: 12
+        orderBy: { date: 'asc' }
       }
     },
     orderBy: { paymentDay: 'asc' }
   })
 
+  const now = new Date()
+
   // Считаем сводку
-  const totalMonthly = loans.filter(l => l.isActive).reduce((s, l) => s + l.monthlyPayment, 0)
-  const totalRemaining = loans.filter(l => l.isActive).reduce((s, l) => s + l.remainingAmount, 0)
-  const totalDebt = loans.filter(l => l.isActive).reduce((s, l) => s + l.totalAmount, 0)
+  const activeLoans = loans.filter(l => l.isActive)
+  const totalMonthly = activeLoans.reduce((s, l) => s + l.monthlyPayment, 0)
+  const totalRemaining = activeLoans.reduce((s, l) => s + l.remainingAmount, 0)
+  const totalDebt = activeLoans.reduce((s, l) => s + l.totalAmount, 0)
+
+  // Просроченные платежи
+  let overdueCount = 0
+  let overdueAmount = 0
+  let nextPaymentDate: string | null = null
+  let nextPaymentMinDate: Date | null = null
+
+  for (const loan of activeLoans) {
+    for (const p of loan.payments) {
+      if (!p.isPaid && new Date(p.date) < now) {
+        overdueCount++
+        overdueAmount += p.amount
+      }
+      if (!p.isPaid && new Date(p.date) >= now) {
+        if (!nextPaymentMinDate || new Date(p.date) < nextPaymentMinDate) {
+          nextPaymentMinDate = new Date(p.date)
+        }
+      }
+    }
+  }
+
+  if (nextPaymentMinDate) {
+    nextPaymentDate = nextPaymentMinDate.toISOString()
+  }
 
   return NextResponse.json({
     loans,
-    summary: { totalMonthly, totalRemaining, totalDebt, activeCount: loans.filter(l => l.isActive).length }
+    summary: {
+      totalMonthly,
+      totalRemaining,
+      totalDebt,
+      activeCount: activeLoans.length,
+      overdueCount,
+      overdueAmount,
+      nextPaymentDate
+    }
   })
 }
 
@@ -57,9 +91,9 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { name, loanType, totalAmount, remainingAmount, monthlyPayment, interestRate, paymentDay, startDate, endDate, creditor } = body
+  const { name, loanType, scheduleType, totalAmount, remainingAmount, monthlyPayment, interestRate, totalMonths, paymentDay, startDate, endDate, creditor } = body
 
-  if (!name || !loanType || !totalAmount || !monthlyPayment || !startDate) {
+  if (!name || !loanType || !totalAmount || !startDate) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
@@ -67,15 +101,18 @@ export async function POST(request: NextRequest) {
     data: {
       name,
       loanType,
+      scheduleType: scheduleType || 'MANUAL',
       totalAmount: parseFloat(totalAmount),
       remainingAmount: parseFloat(remainingAmount || totalAmount),
-      monthlyPayment: parseFloat(monthlyPayment),
+      monthlyPayment: parseFloat(monthlyPayment || '0'),
       interestRate: interestRate ? parseFloat(interestRate) : null,
+      totalMonths: totalMonths ? parseInt(totalMonths) : null,
       paymentDay: parseInt(paymentDay) || 1,
       startDate: new Date(startDate),
       endDate: endDate ? new Date(endDate) : null,
       creditor: creditor || null,
-    }
+    },
+    include: { payments: true }
   })
 
   return NextResponse.json(loan, { status: 201 })

@@ -33,17 +33,23 @@ export async function PUT(
   const data: Record<string, unknown> = {}
   if (body.name !== undefined) data.name = body.name
   if (body.loanType !== undefined) data.loanType = body.loanType
+  if (body.scheduleType !== undefined) data.scheduleType = body.scheduleType
   if (body.totalAmount !== undefined) data.totalAmount = parseFloat(body.totalAmount)
   if (body.remainingAmount !== undefined) data.remainingAmount = parseFloat(body.remainingAmount)
   if (body.monthlyPayment !== undefined) data.monthlyPayment = parseFloat(body.monthlyPayment)
   if (body.interestRate !== undefined) data.interestRate = body.interestRate ? parseFloat(body.interestRate) : null
+  if (body.totalMonths !== undefined) data.totalMonths = body.totalMonths ? parseInt(body.totalMonths) : null
   if (body.paymentDay !== undefined) data.paymentDay = parseInt(body.paymentDay)
   if (body.startDate !== undefined) data.startDate = new Date(body.startDate)
   if (body.endDate !== undefined) data.endDate = body.endDate ? new Date(body.endDate) : null
   if (body.creditor !== undefined) data.creditor = body.creditor
   if (body.isActive !== undefined) data.isActive = body.isActive
 
-  const loan = await prisma.loan.update({ where: { id }, data })
+  const loan = await prisma.loan.update({
+    where: { id },
+    data,
+    include: { payments: { orderBy: { date: 'asc' } } }
+  })
 
   return NextResponse.json(loan)
 }
