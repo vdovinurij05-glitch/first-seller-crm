@@ -19,13 +19,11 @@ import {
   Edit,
   ChevronLeft,
   ChevronRight,
-  Filter,
   LayoutGrid,
   List,
   Users,
   HandCoins,
-  HelpCircle,
-  Lock
+  HelpCircle
 } from 'lucide-react'
 import {
   BarChart,
@@ -92,11 +90,12 @@ interface FinanceRecord {
   createdAt: string
 }
 
-interface SafeBalanceItem {
+interface AccountBalanceItem {
   legalEntityId: string
   name: string
   businessUnitName: string
   initialBalance: number
+  totalIncome: number
   totalExpenses: number
   balance: number
 }
@@ -108,8 +107,8 @@ interface Summary {
   totalUnpaid: number
   totalReceivable: number
   totalPayable: number
-  safeBalance: number
-  safeBalances: SafeBalanceItem[]
+  totalBalance: number
+  accountBalances: AccountBalanceItem[]
   byCategory: { name: string; group: string | null; income: number; expense: number }[]
   byBusinessUnit: { name: string; income: number; expense: number }[]
   upcomingExpenses: FinanceRecord[]
@@ -615,28 +614,28 @@ export default function PnLPage() {
             </p>
           </div>
 
-          {/* Сейф */}
+          {/* Баланс */}
           <div
             className="rounded-2xl border p-5 hover:shadow-md transition cursor-pointer bg-gradient-to-br from-violet-50 to-purple-50 border-violet-100"
             onClick={() => setShowLegalEntities(true)}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Сейф</span>
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Остаток</span>
               <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
-                <Lock className="w-4 h-4 text-violet-600" />
+                <Wallet className="w-4 h-4 text-violet-600" />
               </div>
             </div>
             <p className={`text-2xl font-bold ${
-              summary.safeBalance >= 0 ? 'text-violet-700' : 'text-red-600'
+              summary.totalBalance >= 0 ? 'text-violet-700' : 'text-red-600'
             }`}>
-              {formatMoney(summary.safeBalance)}
+              {formatMoney(summary.totalBalance)}
             </p>
-            {summary.safeBalances && summary.safeBalances.length > 0 && (
+            {summary.accountBalances && summary.accountBalances.length > 0 && (
               <div className="mt-2 space-y-1">
-                {summary.safeBalances.map(sb => (
-                  <div key={sb.legalEntityId} className="flex justify-between text-xs">
-                    <span className="text-gray-500 truncate">{sb.name}</span>
-                    <span className={sb.balance >= 0 ? 'text-violet-600' : 'text-red-500'}>{formatMoney(sb.balance)}</span>
+                {summary.accountBalances.map(ab => (
+                  <div key={ab.legalEntityId} className="flex justify-between text-xs">
+                    <span className="text-gray-500 truncate">{ab.name}</span>
+                    <span className={ab.balance >= 0 ? 'text-violet-600' : 'text-red-500'}>{formatMoney(ab.balance)}</span>
                   </div>
                 ))}
               </div>
@@ -892,9 +891,6 @@ export default function PnLPage() {
                     r.type === 'INCOME' ? 'text-emerald-600' : 'text-red-500'
                   }`}>
                     {r.type === 'INCOME' ? '+' : '−'}{formatMoney(r.amount)}
-                    {r.fromSafe && (
-                      <span className="ml-1 text-xs text-violet-500">(сейф)</span>
-                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1">
@@ -1191,20 +1187,6 @@ export default function PnLPage() {
                 <FieldHint text="Снимите галочку, если платёж запланирован, но ещё не оплачен. Неоплаченные записи попадают в раздел «Ожидает оплаты» и отображаются в платёжном календаре красным." />
               </label>
 
-              {/* Из сейфа (только для расходов) */}
-              {form.type === 'EXPENSE' && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.fromSafe}
-                    onChange={e => setForm(f => ({ ...f, fromSafe: e.target.checked }))}
-                    className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
-                  />
-                  <span className="text-sm text-gray-700">Оплата из сейфа</span>
-                  <FieldHint text="Отметьте, если этот расход оплачен наличными из сейфа. Сумма автоматически спишется с баланса сейфа." />
-                </label>
-              )}
-
               <button
                 type="submit"
                 className="w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition"
@@ -1434,7 +1416,7 @@ export default function PnLPage() {
           <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-gray-900">Юр.лица и сейф</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Юр.лица и балансы</h2>
               <button
                 onClick={() => setShowLegalEntities(false)}
                 className="p-1 hover:bg-gray-100 rounded-lg"
@@ -1446,9 +1428,9 @@ export default function PnLPage() {
             {/* Суммарный баланс */}
             <div className="bg-violet-50 rounded-xl p-4 mb-5">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">Общий баланс сейфа</span>
-                <span className={`text-xl font-bold ${(summary?.safeBalance ?? 0) >= 0 ? 'text-violet-700' : 'text-red-600'}`}>
-                  {formatMoney(summary?.safeBalance ?? 0)}
+                <span className="text-sm font-medium text-gray-700">Общий текущий остаток</span>
+                <span className={`text-xl font-bold ${(summary?.totalBalance ?? 0) >= 0 ? 'text-violet-700' : 'text-red-600'}`}>
+                  {formatMoney(summary?.totalBalance ?? 0)}
                 </span>
               </div>
             </div>
@@ -1459,7 +1441,7 @@ export default function PnLPage() {
                 <p className="text-sm text-gray-400 italic text-center py-4">Нет юр.лиц. Добавьте первое.</p>
               ) : (
                 legalEntities.map(le => {
-                  const sb = summary?.safeBalances?.find(s => s.legalEntityId === le.id)
+                  const ab = summary?.accountBalances?.find(s => s.legalEntityId === le.id)
                   return (
                     <div key={le.id} className="border border-gray-100 rounded-xl p-4 hover:border-violet-200 transition group">
                       <div className="flex items-center justify-between mb-2">
@@ -1490,19 +1472,23 @@ export default function PnLPage() {
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="grid grid-cols-4 gap-2 text-xs">
                         <div>
-                          <span className="text-gray-400">Начальный</span>
-                          <p className="font-medium text-gray-700">{formatMoney(sb?.initialBalance ?? le.initialBalance)}</p>
+                          <span className="text-gray-400">Нач. остаток</span>
+                          <p className="font-medium text-gray-700">{formatMoney(ab?.initialBalance ?? le.initialBalance)}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Доходы</span>
+                          <p className="font-medium text-emerald-600">{formatMoney(ab?.totalIncome ?? 0)}</p>
                         </div>
                         <div>
                           <span className="text-gray-400">Расходы</span>
-                          <p className="font-medium text-red-500">{formatMoney(sb?.totalExpenses ?? 0)}</p>
+                          <p className="font-medium text-red-500">{formatMoney(ab?.totalExpenses ?? 0)}</p>
                         </div>
                         <div>
                           <span className="text-gray-400">Остаток</span>
-                          <p className={`font-medium ${(sb?.balance ?? 0) >= 0 ? 'text-violet-700' : 'text-red-600'}`}>
-                            {formatMoney(sb?.balance ?? le.initialBalance)}
+                          <p className={`font-medium ${(ab?.balance ?? 0) >= 0 ? 'text-violet-700' : 'text-red-600'}`}>
+                            {formatMoney(ab?.balance ?? le.initialBalance)}
                           </p>
                         </div>
                       </div>

@@ -112,30 +112,42 @@ export async function GET(request: NextRequest) {
   })
   const totalPayable = payables.reduce((sum, r) => sum + r.amount, 0)
 
-  // Балансы по юрлицам (глобально, не зависит от фильтров месяца)
+  // Текущий остаток по юрлицам: начальный + доходы − расходы (с effectiveDate)
   const legalEntities = await prisma.legalEntity.findMany({
     include: { businessUnit: true }
   })
-  const safeBalances = await Promise.all(legalEntities.map(async (le) => {
-    const safeExpenses = await prisma.financeRecord.aggregate({
-      where: {
-        legalEntityId: le.id,
-        fromSafe: true,
-        type: 'EXPENSE',
-        date: { gte: le.effectiveDate }
-      },
-      _sum: { amount: true }
-    })
+  const accountBalances = await Promise.all(legalEntities.map(async (le) => {
+    const [incomeAgg, expenseAgg] = await Promise.all([
+      prisma.financeRecord.aggregate({
+        where: {
+          legalEntityId: le.id,
+          type: 'INCOME',
+          date: { gte: le.effectiveDate }
+        },
+        _sum: { amount: true }
+      }),
+      prisma.financeRecord.aggregate({
+        where: {
+          legalEntityId: le.id,
+          type: 'EXPENSE',
+          date: { gte: le.effectiveDate }
+        },
+        _sum: { amount: true }
+      })
+    ])
+    const totalInc = incomeAgg._sum.amount || 0
+    const totalExp = expenseAgg._sum.amount || 0
     return {
       legalEntityId: le.id,
       name: le.name,
       businessUnitName: le.businessUnit.name,
       initialBalance: le.initialBalance,
-      totalExpenses: safeExpenses._sum.amount || 0,
-      balance: le.initialBalance - (safeExpenses._sum.amount || 0)
+      totalIncome: totalInc,
+      totalExpenses: totalExp,
+      balance: le.initialBalance + totalInc - totalExp
     }
   }))
-  const safeBalance = safeBalances.reduce((sum, sb) => sum + sb.balance, 0)
+  const totalBalance = accountBalances.reduce((sum, ab) => sum + ab.balance, 0)
 
   return NextResponse.json({
     period: { from: dateFrom, to: dateTo },
@@ -145,8 +157,8 @@ export async function GET(request: NextRequest) {
     totalUnpaid,
     totalReceivable,
     totalPayable,
-    safeBalance,
-    safeBalances,
+    totalBalance,
+    accountBalances,
     byCategory: Object.values(byCategory),
     byBusinessUnit: Object.values(byBusinessUnit),
     upcomingExpenses,
