@@ -142,7 +142,8 @@ export async function GET(request: NextRequest) {
         where: {
           legalEntityId: le.id,
           type: 'EXPENSE',
-          date: { gte: le.effectiveDate }
+          date: { gte: le.effectiveDate },
+          paidByFounder: null // не учитываем расходы оплаченные учредителями из своих
         },
         _sum: { amount: true }
       })
