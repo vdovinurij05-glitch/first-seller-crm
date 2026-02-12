@@ -169,6 +169,7 @@ export default function PnLPage() {
   const [filterBU, setFilterBU] = useState<string>('')
   const [filterLE, setFilterLE] = useState<string>('')
   const [filterType, setFilterType] = useState<string>('')
+  const [filterFounder, setFilterFounder] = useState<string>('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
 
   // Модалки
@@ -212,7 +213,7 @@ export default function PnLPage() {
 
   useEffect(() => {
     fetchAll()
-  }, [currentMonth, filterBU, filterLE])
+  }, [currentMonth, filterBU, filterLE, filterFounder])
 
   async function fetchAll() {
     setLoading(true)
@@ -221,8 +222,13 @@ export default function PnLPage() {
     const buParam = filterBU ? `&businessUnitId=${filterBU}` : ''
     const leParam = filterLE ? `&legalEntityId=${filterLE}` : ''
 
+    // При фильтре по учредителю — загружаем все записи без ограничения по дате
+    const recUrl = filterFounder
+      ? `/api/pnl?paidByFounder=${encodeURIComponent(filterFounder)}${buParam}${leParam}`
+      : `/api/pnl?from=${from}&to=${to}${buParam}${leParam}`
+
     const [recRes, catRes, buRes, sumRes, empRes, leRes] = await Promise.all([
-      fetch(`/api/pnl?from=${from}&to=${to}${buParam}${leParam}`),
+      fetch(recUrl),
       fetch('/api/pnl/categories'),
       fetch('/api/pnl/business-units'),
       fetch(`/api/pnl/summary?from=${from}&to=${to}${buParam}${leParam}`),
@@ -435,9 +441,9 @@ export default function PnLPage() {
     .map(b => ({ name: b.name, value: b.income + b.expense })) || []
 
   // Фильтрованные записи
-  const filteredRecords = filterType
-    ? records.filter(r => r.type === filterType)
-    : records
+  let filteredRecords = records
+  if (filterType) filteredRecords = filteredRecords.filter(r => r.type === filterType)
+  if (filterFounder) filteredRecords = filteredRecords.filter(r => r.paidByFounder === filterFounder)
 
   if (loading && !summary) {
     return (
@@ -722,10 +728,24 @@ export default function PnLPage() {
           </div>
           <div className="space-y-2">
             {summary.founderDebts.map(d => (
-              <div key={d.name} className="flex items-center justify-between bg-violet-50/50 rounded-xl px-4 py-3">
+              <button
+                key={d.name}
+                onClick={() => {
+                  setFilterFounder(filterFounder === d.name ? '' : d.name)
+                  document.getElementById('records-table')?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                className={`w-full flex items-center justify-between rounded-xl px-4 py-3 transition ${
+                  filterFounder === d.name
+                    ? 'bg-violet-100 ring-2 ring-violet-400'
+                    : 'bg-violet-50/50 hover:bg-violet-100/70'
+                }`}
+              >
                 <span className="text-sm font-medium text-gray-900">{d.name}</span>
-                <span className="text-sm font-bold text-violet-600">{formatMoney(d.amount)}</span>
-              </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-violet-600">{formatMoney(d.amount)}</span>
+                  <span className="text-xs text-violet-400">{filterFounder === d.name ? '✕' : '→'}</span>
+                </div>
+              </button>
             ))}
           </div>
         </div>
@@ -856,7 +876,15 @@ export default function PnLPage() {
       )}
 
       {/* Фильтры записей */}
-      <div className="flex items-center gap-2">
+      <div id="records-table" className="flex items-center gap-2 flex-wrap">
+        {filterFounder && (
+          <button
+            onClick={() => setFilterFounder('')}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-100 text-violet-700 flex items-center gap-1"
+          >
+            Расходы: {filterFounder} <X className="w-3 h-3" />
+          </button>
+        )}
         <button
           onClick={() => setFilterType('')}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${

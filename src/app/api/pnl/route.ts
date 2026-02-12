@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
   const categoryId = searchParams.get('categoryId')
   const businessUnitId = searchParams.get('businessUnitId')
   const legalEntityId = searchParams.get('legalEntityId')
+  const paidByFounder = searchParams.get('paidByFounder')
   const isPaid = searchParams.get('isPaid')
 
   const where: any = {}
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
   if (categoryId) where.categoryId = categoryId
   if (businessUnitId) where.businessUnitId = businessUnitId
   if (legalEntityId) where.legalEntityId = legalEntityId
+  if (paidByFounder) where.paidByFounder = paidByFounder
   if (isPaid !== null && isPaid !== undefined && isPaid !== '') {
     where.isPaid = isPaid === 'true'
   }
