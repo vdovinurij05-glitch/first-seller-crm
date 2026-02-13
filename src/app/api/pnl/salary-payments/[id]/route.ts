@@ -41,6 +41,17 @@ export async function PUT(
     include: { employee: true }
   })
 
+  // Синхронизировать isPaid/amount в FinanceRecord (PnL календарь)
+  const frData: Record<string, unknown> = {}
+  if (body.isPaid !== undefined) frData.isPaid = body.isPaid
+  if (body.amount !== undefined) frData.amount = parseFloat(body.amount)
+  if (Object.keys(frData).length > 0) {
+    await prisma.financeRecord.updateMany({
+      where: { salaryPaymentId: id },
+      data: frData
+    })
+  }
+
   return NextResponse.json(payment)
 }
 
@@ -55,6 +66,8 @@ export async function DELETE(
   }
 
   const { id } = await params
+  // Удаляем связанную запись из PnL календаря
+  await prisma.financeRecord.deleteMany({ where: { salaryPaymentId: id } })
   await prisma.salaryPayment.delete({ where: { id } })
 
   return NextResponse.json({ success: true })

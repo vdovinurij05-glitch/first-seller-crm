@@ -58,6 +58,8 @@ export async function GET(request: NextRequest) {
     if (r.founderRepayment) continue
     // Платежи по кредитам учитываются в разделе Кредиты, не в P&L расходах
     if (r.loanId) continue
+    // Зарплатные записи из генератора — отображаются только в календаре
+    if (r.salaryPaymentId) continue
 
     if (r.type === 'INCOME') totalIncome += r.amount
     else totalExpense += r.amount
@@ -163,7 +165,8 @@ export async function GET(request: NextRequest) {
           date: { gte: le.effectiveDate },
           paidByFounder: null, // не учитываем расходы оплаченные учредителями из своих
           founderRepayment: null, // не учитываем возврат долга учредителям
-          loanId: null // не учитываем платежи по кредитам (обслуживание долга)
+          loanId: null, // не учитываем платежи по кредитам (обслуживание долга)
+          salaryPaymentId: null // зарплатные записи из генератора — только для календаря
         },
         _sum: { amount: true }
       })

@@ -409,6 +409,7 @@ model FinanceRecord {
   paidByFounder    String?                // "Юрий" | "Дмитрий" — оплачено из личных средств учредителя
   founderRepayment String?                // "Юрий" | "Дмитрий" — возврат долга учредителю
   loanId           String?                // привязка к займу (платежи по кредиту — не уменьшают баланс)
+  salaryPaymentId  String?                // привязка к зарплатному платежу (для отображения в календаре)
   source      String   @default("MANUAL") // "MANUAL" | "BANK" | "EXCEL" | "TELEGRAM"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

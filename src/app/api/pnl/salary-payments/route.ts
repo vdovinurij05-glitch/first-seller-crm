@@ -150,7 +150,41 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  const created = await prisma.salaryPayment.createMany({ data: payments })
+  // Создаём SalaryPayment записи по одной чтобы получить id для связи
+  const createdPayments = []
+  for (const p of payments) {
+    const sp = await prisma.salaryPayment.create({
+      data: p,
+      include: { employee: true }
+    })
+    createdPayments.push(sp)
+  }
 
-  return NextResponse.json({ generated: created.count })
+  // Находим категорию ЗП для FinanceRecord
+  const salaryCat = await prisma.financeCategory.findFirst({
+    where: { group: 'SALARY', type: 'EXPENSE' }
+  })
+
+  // Создаём FinanceRecord для каждого платежа (для отображения в календаре)
+  if (salaryCat) {
+    for (const sp of createdPayments) {
+      const typeLabel = sp.salaryType === 'OFFICIAL' ? 'белая' : 'чёрная'
+      await prisma.financeRecord.create({
+        data: {
+          type: 'EXPENSE',
+          amount: sp.amount,
+          date: sp.date,
+          dueDate: sp.date,
+          description: `ЗП ${sp.employee.name} — ${sp.comment || typeLabel}`,
+          categoryId: salaryCat.id,
+          businessUnitId: sp.employee.businessUnitId || undefined,
+          isPaid: sp.isPaid,
+          salaryPaymentId: sp.id,
+          source: 'MANUAL'
+        }
+      })
+    }
+  }
+
+  return NextResponse.json({ generated: createdPayments.length })
 }
