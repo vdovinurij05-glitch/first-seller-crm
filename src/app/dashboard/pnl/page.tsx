@@ -19,6 +19,7 @@ import {
   Edit,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   LayoutGrid,
   List,
   Users,
@@ -180,6 +181,7 @@ export default function PnLPage() {
   const [showManageBU, setShowManageBU] = useState(false)
   const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null)
   const [showLegalEntities, setShowLegalEntities] = useState(false)
+  const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [leForm, setLeForm] = useState({ name: '', businessUnitId: '', initialBalance: '', effectiveDate: new Date().getFullYear() + '-01-01' })
   const [editingLE, setEditingLE] = useState<LegalEntity | null>(null)
 
@@ -566,7 +568,20 @@ export default function PnLPage() {
       {/* Виджеты сводки */}
       {summary && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition">
+          <div
+            className={`bg-white rounded-2xl border p-5 hover:shadow-md transition cursor-pointer ${
+              expandedSection === 'income' ? 'border-emerald-300 ring-2 ring-emerald-100' : 'border-gray-100'
+            }`}
+            onClick={() => {
+              if (expandedSection === 'income') {
+                setExpandedSection(null)
+                setFilterType('')
+              } else {
+                setExpandedSection('income')
+                setFilterType('INCOME')
+              }
+            }}
+          >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Доходы</span>
               <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
@@ -574,9 +589,25 @@ export default function PnLPage() {
               </div>
             </div>
             <p className="text-2xl font-bold text-gray-900">{formatMoney(summary.totalIncome)}</p>
+            <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+              Подробнее <ChevronDown className={`w-3 h-3 transition-transform ${expandedSection === 'income' ? 'rotate-180' : ''}`} />
+            </p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition">
+          <div
+            className={`bg-white rounded-2xl border p-5 hover:shadow-md transition cursor-pointer ${
+              expandedSection === 'expenses' ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-100'
+            }`}
+            onClick={() => {
+              if (expandedSection === 'expenses') {
+                setExpandedSection(null)
+                setFilterType('')
+              } else {
+                setExpandedSection('expenses')
+                setFilterType('EXPENSE')
+              }
+            }}
+          >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Расходы</span>
               <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
@@ -584,13 +615,23 @@ export default function PnLPage() {
               </div>
             </div>
             <p className="text-2xl font-bold text-gray-900">{formatMoney(summary.totalExpense)}</p>
+            <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+              Подробнее <ChevronDown className={`w-3 h-3 transition-transform ${expandedSection === 'expenses' ? 'rotate-180' : ''}`} />
+            </p>
           </div>
 
-          <div className={`rounded-2xl border p-5 hover:shadow-md transition ${
-            summary.profit >= 0
-              ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-100'
-              : 'bg-gradient-to-br from-red-50 to-orange-50 border-red-100'
-          }`}>
+          <div
+            className={`rounded-2xl border p-5 hover:shadow-md transition cursor-pointer ${
+              expandedSection === 'profit'
+                ? (summary.profit >= 0
+                  ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-300 ring-2 ring-emerald-100'
+                  : 'bg-gradient-to-br from-red-50 to-orange-50 border-red-300 ring-2 ring-red-100')
+                : (summary.profit >= 0
+                  ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-100'
+                  : 'bg-gradient-to-br from-red-50 to-orange-50 border-red-100')
+            }`}
+            onClick={() => setExpandedSection(expandedSection === 'profit' ? null : 'profit')}
+          >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Чистыми</span>
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
@@ -604,13 +645,23 @@ export default function PnLPage() {
             <p className={`text-2xl font-bold ${summary.profit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
               {formatMoney(summary.profit)}
             </p>
+            <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+              По направлениям <ChevronDown className={`w-3 h-3 transition-transform ${expandedSection === 'profit' ? 'rotate-180' : ''}`} />
+            </p>
           </div>
 
-          <div className={`rounded-2xl border p-5 hover:shadow-md transition ${
-            summary.totalUnpaid > 0
-              ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-100'
-              : 'bg-white border-gray-100'
-          }`}>
+          <div
+            className={`rounded-2xl border p-5 hover:shadow-md transition cursor-pointer ${
+              expandedSection === 'unpaid'
+                ? (summary.totalUnpaid > 0
+                  ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-300 ring-2 ring-amber-100'
+                  : 'bg-white border-amber-300 ring-2 ring-amber-100')
+                : (summary.totalUnpaid > 0
+                  ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-100'
+                  : 'bg-white border-gray-100')
+            }`}
+            onClick={() => setExpandedSection(expandedSection === 'unpaid' ? null : 'unpaid')}
+          >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Ожидает оплаты</span>
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
@@ -621,6 +672,9 @@ export default function PnLPage() {
             </div>
             <p className={`text-2xl font-bold ${summary.totalUnpaid > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
               {formatMoney(summary.totalUnpaid)}
+            </p>
+            <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+              Подробнее <ChevronDown className={`w-3 h-3 transition-transform ${expandedSection === 'unpaid' ? 'rotate-180' : ''}`} />
             </p>
           </div>
 
@@ -656,7 +710,7 @@ export default function PnLPage() {
       )}
 
       {/* Дебиторка / Кредиторка */}
-      {summary && (summary.totalReceivable > 0 || summary.totalPayable > 0) && (
+      {expandedSection === 'unpaid' && summary && (summary.totalReceivable > 0 || summary.totalPayable > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Нам должны */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
@@ -790,7 +844,7 @@ export default function PnLPage() {
       })()}
 
       {/* По направлениям — pie chart */}
-      {summary && buChartData.length > 0 && (
+      {expandedSection === 'profit' && summary && buChartData.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <h3 className="text-sm font-medium text-gray-900 mb-4">По направлениям</h3>
           <ResponsiveContainer width="100%" height={250}>
@@ -816,7 +870,7 @@ export default function PnLPage() {
       )}
 
       {/* По направлениям — карточки */}
-      {summary && summary.byBusinessUnit.length > 0 && (
+      {expandedSection === 'profit' && summary && summary.byBusinessUnit.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {summary.byBusinessUnit.map((bu, i) => (
             <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition">
@@ -846,7 +900,7 @@ export default function PnLPage() {
       )}
 
       {/* Предстоящие расходы */}
-      {summary && summary.upcomingExpenses.length > 0 && (
+      {expandedSection === 'unpaid' && summary && summary.upcomingExpenses.length > 0 && (
         <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-100 p-5">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
@@ -875,135 +929,139 @@ export default function PnLPage() {
         </div>
       )}
 
-      {/* Фильтры записей */}
-      <div id="records-table" className="flex items-center gap-2 flex-wrap">
-        {filterFounder && (
-          <button
-            onClick={() => setFilterFounder('')}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-100 text-violet-700 flex items-center gap-1"
-          >
-            Расходы: {filterFounder} <X className="w-3 h-3" />
-          </button>
-        )}
-        <button
-          onClick={() => setFilterType('')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-            !filterType ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'
-          }`}
-        >
-          Все
-        </button>
-        <button
-          onClick={() => setFilterType('INCOME')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-            filterType === 'INCOME' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500 hover:bg-gray-100'
-          }`}
-        >
-          Доходы
-        </button>
-        <button
-          onClick={() => setFilterType('EXPENSE')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-            filterType === 'EXPENSE' ? 'bg-red-100 text-red-700' : 'text-gray-500 hover:bg-gray-100'
-          }`}
-        >
-          Расходы
-        </button>
-      </div>
+      {/* Фильтры записей и таблица — показываются при клике на Доходы/Расходы */}
+      {(expandedSection === 'income' || expandedSection === 'expenses' || filterFounder) && (
+        <>
+          <div id="records-table" className="flex items-center gap-2 flex-wrap">
+            {filterFounder && (
+              <button
+                onClick={() => setFilterFounder('')}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-100 text-violet-700 flex items-center gap-1"
+              >
+                Расходы: {filterFounder} <X className="w-3 h-3" />
+              </button>
+            )}
+            <button
+              onClick={() => setFilterType('')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                !filterType ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              Все
+            </button>
+            <button
+              onClick={() => setFilterType('INCOME')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                filterType === 'INCOME' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              Доходы
+            </button>
+            <button
+              onClick={() => setFilterType('EXPENSE')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                filterType === 'EXPENSE' ? 'bg-red-100 text-red-700' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              Расходы
+            </button>
+          </div>
 
-      {/* Таблица записей */}
-      {filteredRecords.length > 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Дата</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Категория</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Описание</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Направление</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Менеджер</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Статус</th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Сумма</th>
-                <th className="px-5 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRecords.map(r => (
-                <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
-                  <td className="px-5 py-3.5 text-sm text-gray-600">{formatDate(r.date)}</td>
-                  <td className="px-5 py-3.5">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      r.type === 'INCOME'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-red-50 text-red-700'
-                    }`}>
-                      {r.category.name}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-sm text-gray-600">{r.description || '—'}</td>
-                  <td className="px-5 py-3.5 text-sm text-gray-500">
-                    <div>{r.businessUnit?.name || '—'}</div>
-                    {r.legalEntity && (
-                      <div className="text-xs text-gray-400">{r.legalEntity.name}</div>
-                    )}
-                    {r.paidByFounder && (
-                      <div className="text-xs text-violet-500">Оплатил: {r.paidByFounder}</div>
-                    )}
-                    {r.founderRepayment && (
-                      <div className="text-xs text-emerald-500">Возврат: {r.founderRepayment}</div>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-sm text-gray-500">
-                    {r.salesManager ? (
-                      <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
-                        {r.salesManager.name}
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {r.isPaid ? (
-                      <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Оплачено</span>
-                    ) : (
-                      <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Ожидает</span>
-                    )}
-                  </td>
-                  <td className={`px-5 py-3.5 text-sm font-semibold text-right ${
-                    r.type === 'INCOME' ? 'text-emerald-600' : 'text-red-500'
-                  }`}>
-                    {r.type === 'INCOME' ? '+' : '−'}{formatMoney(r.amount)}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => openEdit(r)}
-                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteRecord(r.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
-          <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">Нет записей за этот период</p>
-          <button
-            onClick={() => { resetForm(); setEditingRecord(null); setShowAddRecord(true) }}
-            className="mt-3 text-indigo-600 text-sm font-medium hover:underline"
-          >
-            Добавить первую запись
-          </button>
-        </div>
+          {/* Таблица записей */}
+          {filteredRecords.length > 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Дата</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Категория</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Описание</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Направление</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Менеджер</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Статус</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Сумма</th>
+                    <th className="px-5 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRecords.map(r => (
+                    <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
+                      <td className="px-5 py-3.5 text-sm text-gray-600">{formatDate(r.date)}</td>
+                      <td className="px-5 py-3.5">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          r.type === 'INCOME'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-red-50 text-red-700'
+                        }`}>
+                          {r.category.name}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-gray-600">{r.description || '—'}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-500">
+                        <div>{r.businessUnit?.name || '—'}</div>
+                        {r.legalEntity && (
+                          <div className="text-xs text-gray-400">{r.legalEntity.name}</div>
+                        )}
+                        {r.paidByFounder && (
+                          <div className="text-xs text-violet-500">Оплатил: {r.paidByFounder}</div>
+                        )}
+                        {r.founderRepayment && (
+                          <div className="text-xs text-emerald-500">Возврат: {r.founderRepayment}</div>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-gray-500">
+                        {r.salesManager ? (
+                          <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+                            {r.salesManager.name}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {r.isPaid ? (
+                          <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Оплачено</span>
+                        ) : (
+                          <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Ожидает</span>
+                        )}
+                      </td>
+                      <td className={`px-5 py-3.5 text-sm font-semibold text-right ${
+                        r.type === 'INCOME' ? 'text-emerald-600' : 'text-red-500'
+                      }`}>
+                        {r.type === 'INCOME' ? '+' : '−'}{formatMoney(r.amount)}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openEdit(r)}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRecord(r.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+              <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">Нет записей за этот период</p>
+              <button
+                onClick={() => { resetForm(); setEditingRecord(null); setShowAddRecord(true) }}
+                className="mt-3 text-indigo-600 text-sm font-medium hover:underline"
+              >
+                Добавить первую запись
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Модалка: Добавить/редактировать запись */}
