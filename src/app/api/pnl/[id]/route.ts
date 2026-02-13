@@ -31,6 +31,12 @@ export async function PUT(
   const body = await request.json()
   const { amount, type, description, date, dueDate, isPaid, categoryId, businessUnitId, counterparty, debtType, client, salesManagerId } = body
 
+  // Сохраняем старую запись для лога
+  const oldRecord = await prisma.financeRecord.findUnique({
+    where: { id },
+    include: { category: true }
+  })
+
   const record = await prisma.financeRecord.update({
     where: { id },
     data: {
@@ -59,6 +65,21 @@ export async function PUT(
     }
   })
 
+  // Audit log
+  const changes: string[] = []
+  if (oldRecord) {
+    if (amount !== undefined && parseFloat(amount) !== oldRecord.amount) changes.push(`сумма: ${oldRecord.amount} → ${parseFloat(amount)}`)
+    if (isPaid !== undefined && isPaid !== oldRecord.isPaid) changes.push(isPaid ? 'оплачено' : 'снята оплата')
+    if (description !== undefined && description !== oldRecord.description) changes.push(`описание: "${description}"`)
+  }
+  await prisma.financeAuditLog.create({
+    data: {
+      action: 'UPDATE',
+      amount: record.amount,
+      description: `Изменено: ${oldRecord?.category.name || record.category.name}${oldRecord?.description ? ' — ' + oldRecord.description : ''} (${record.amount.toLocaleString('ru')} ₽)${changes.length ? '. ' + changes.join(', ') : ''}`,
+    }
+  })
+
   return NextResponse.json({ record })
 }
 
@@ -74,9 +95,26 @@ export async function DELETE(
 
   const { id } = await params
 
+  // Сохраняем инфо для лога до удаления
+  const record = await prisma.financeRecord.findUnique({
+    where: { id },
+    include: { category: true }
+  })
+
   await prisma.financeRecord.delete({
     where: { id }
   })
+
+  // Audit log
+  if (record) {
+    await prisma.financeAuditLog.create({
+      data: {
+        action: 'DELETE',
+        amount: record.amount,
+        description: `Удалено: ${record.type === 'INCOME' ? 'Доход' : 'Расход'} — ${record.category.name}${record.description ? ' — ' + record.description : ''} (${record.amount.toLocaleString('ru')} ₽)`,
+      }
+    })
+  }
 
   return NextResponse.json({ success: true })
 }

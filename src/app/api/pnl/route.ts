@@ -106,5 +106,14 @@ export async function POST(request: NextRequest) {
     }
   })
 
+  // Audit log
+  await prisma.financeAuditLog.create({
+    data: {
+      action: 'CREATE',
+      amount: record.amount,
+      description: `${type === 'INCOME' ? 'Доход' : 'Расход'}: ${record.category.name}${description ? ' — ' + description : ''} (${parseFloat(amount).toLocaleString('ru')} ₽)`,
+    }
+  })
+
   return NextResponse.json({ record }, { status: 201 })
 }

@@ -417,6 +417,19 @@ model FinanceRecord {
   @@map("finance_records")
 }
 
+// Лог изменений финансовых записей
+model FinanceAuditLog {
+  id          String   @id @default(cuid())
+  action      String              // "CREATE" | "UPDATE" | "DELETE"
+  recordType  String   @default("RECORD") // "RECORD" | "SALARY" | "LOAN_PAYMENT"
+  amount      Float?
+  description String?             // человекочитаемое описание действия
+  details     String?             // JSON с деталями изменений
+  createdAt   DateTime @default(now())
+
+  @@map("finance_audit_logs")
+}
+
 // Настройки сейфа (начальный баланс наличных)
 model SafeSettings {
   id             String   @id @default(cuid())

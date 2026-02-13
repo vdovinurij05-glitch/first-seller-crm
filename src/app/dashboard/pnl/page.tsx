@@ -24,7 +24,8 @@ import {
   List,
   Users,
   HandCoins,
-  HelpCircle
+  HelpCircle,
+  History
 } from 'lucide-react'
 import {
   Tooltip,
@@ -182,6 +183,8 @@ export default function PnLPage() {
   const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null)
   const [showLegalEntities, setShowLegalEntities] = useState(false)
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  const [showAuditLog, setShowAuditLog] = useState(false)
+  const [auditLogs, setAuditLogs] = useState<{ id: string; action: string; amount: number | null; description: string | null; createdAt: string }[]>([])
   const [leForm, setLeForm] = useState({ name: '', businessUnitId: '', initialBalance: '', effectiveDate: new Date().getFullYear() + '-01-01' })
   const [editingLE, setEditingLE] = useState<LegalEntity | null>(null)
 
@@ -562,6 +565,20 @@ export default function PnLPage() {
               <List className="w-4 h-4" />
             </button>
           </div>
+          <button
+            onClick={async () => {
+              setShowAuditLog(true)
+              const res = await fetch('/api/pnl/audit-log')
+              if (res.ok) {
+                const data = await res.json()
+                setAuditLogs(data.logs)
+              }
+            }}
+            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+            title="История изменений"
+          >
+            <History className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -1740,6 +1757,52 @@ export default function PnLPage() {
                   )}
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка: История изменений */}
+      {showAuditLog && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowAuditLog(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b">
+              <div className="flex items-center gap-2">
+                <History className="w-5 h-5 text-indigo-600" />
+                <h2 className="text-lg font-semibold text-gray-900">История изменений</h2>
+              </div>
+              <button onClick={() => setShowAuditLog(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="overflow-y-auto max-h-[65vh] p-5">
+              {auditLogs.length === 0 ? (
+                <p className="text-center text-gray-400 py-8">Пока нет записей</p>
+              ) : (
+                <div className="space-y-3">
+                  {auditLogs.map(log => (
+                    <div key={log.id} className="flex gap-3 items-start">
+                      <div className={`mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        log.action === 'CREATE' ? 'bg-emerald-50' :
+                        log.action === 'DELETE' ? 'bg-red-50' : 'bg-amber-50'
+                      }`}>
+                        <span className={`text-xs font-bold ${
+                          log.action === 'CREATE' ? 'text-emerald-600' :
+                          log.action === 'DELETE' ? 'text-red-500' : 'text-amber-600'
+                        }`}>
+                          {log.action === 'CREATE' ? '+' : log.action === 'DELETE' ? '−' : '~'}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-700 leading-snug">{log.description}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(log.createdAt).toLocaleString('ru', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
