@@ -13,6 +13,25 @@ function verifyMangoSignature(body: string, sign: string): boolean {
   return sign === expectedSign
 }
 
+// Forward webhook to Twenty CRM Mango service
+const TWENTY_MANGO_URL = process.env.TWENTY_MANGO_WEBHOOK_URL || 'http://127.0.0.1:3334/webhook'
+
+async function forwardToTwenty(json: string, sign: string) {
+  try {
+    const body = new URLSearchParams()
+    body.append('json', json)
+    body.append('sign', sign)
+    await fetch(TWENTY_MANGO_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    })
+    console.log('📤 Forwarded to Twenty-Mango')
+  } catch (err) {
+    console.error('📤 Forward to Twenty-Mango failed:', err)
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -27,6 +46,9 @@ export async function POST(request: NextRequest) {
       console.error('Invalid Mango signature')
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
+
+    // Forward to Twenty CRM (fire-and-forget)
+    forwardToTwenty(json, sign)
 
     const event = JSON.parse(json)
     console.log('📥 Parsed event:', JSON.stringify(event, null, 2))
