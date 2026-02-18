@@ -154,6 +154,7 @@ export async function GET(request: NextRequest) {
         where: {
           legalEntityId: le.id,
           type: 'INCOME',
+          isPaid: true, // только фактически полученные деньги
           date: { gte: le.effectiveDate }
         },
         _sum: { amount: true }
@@ -162,10 +163,9 @@ export async function GET(request: NextRequest) {
         where: {
           legalEntityId: le.id,
           type: 'EXPENSE',
+          isPaid: true, // только фактически оплаченные расходы
           date: { gte: le.effectiveDate },
           paidByFounder: null, // не учитываем расходы оплаченные учредителями из своих
-          founderRepayment: null, // не учитываем возврат долга учредителям
-          loanId: null, // не учитываем платежи по кредитам (обслуживание долга)
           salaryPaymentId: null // зарплатные записи из генератора — только для календаря
         },
         _sum: { amount: true }
