@@ -166,6 +166,7 @@ export async function GET(request: NextRequest) {
           isPaid: true, // только фактически оплаченные расходы
           date: { gte: le.effectiveDate },
           paidByFounder: null, // не учитываем расходы оплаченные учредителями из своих
+          loanId: null, // платежи по кредитам отслеживаются отдельно в разделе Кредиты
           salaryPaymentId: null // зарплатные записи из генератора — только для календаря
         },
         _sum: { amount: true }
