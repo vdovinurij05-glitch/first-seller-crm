@@ -27,7 +27,7 @@ jobs:
             echo "🔄 Resetting to latest code from GitHub..."
             git fetch origin main
             git reset --hard origin/main
-            git clean -fd
+            git clean -fd -e public/recordings/
             echo "✅ Code synced to commit: $(git rev-parse HEAD)"
 
             echo "📦 Installing dependencies..."

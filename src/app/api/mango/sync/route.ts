@@ -394,6 +394,19 @@ async function syncCalls(calls: any[]): Promise<number> {
       })
 
       if (existingCall) {
+        // Если файл записи удалён (например, git clean) — сбрасываем recordingUrl
+        if (existingCall.recordingUrl && existingCall.recordingUrl.startsWith('/recordings/')) {
+          const filePath = path.join(process.cwd(), 'public', existingCall.recordingUrl)
+          if (!fs.existsSync(filePath)) {
+            console.log(`🔄 Recording file missing, resetting: ${existingCall.recordingUrl}`)
+            await prisma.call.update({
+              where: { id: existingCall.id },
+              data: { recordingUrl: null }
+            })
+            existingCall.recordingUrl = null
+          }
+        }
+
         // Если звонок есть, но нет записи - пробуем получить запись
         if (!existingCall.recordingUrl && existingCall.status === 'COMPLETED' && existingCall.duration && existingCall.duration > 0) {
           // Получаем поле records из текущих данных Mango
