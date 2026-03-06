@@ -9,33 +9,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Logs
+      - name: Rebuild and test
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
+          command_timeout: 10m
           script: |
             cd /var/www/first-seller-crm
 
-            echo "=== Recording file exists? ==="
-            ls -la public/recordings/MjYxMzI4MzU2ODE__.mp3 2>/dev/null || echo "FILE NOT FOUND"
+            echo "=== Rebuilding ==="
+            rm -rf .next
+            npm run build 2>&1
+            BUILD_EXIT=$?
+            echo "Build exit code: $BUILD_EXIT"
+
+            if [ $BUILD_EXIT -ne 0 ]; then
+              echo "BUILD FAILED!"
+              exit 1
+            fi
 
             echo ""
-            echo "=== OPENAI_API_KEY length ==="
-            grep "OPENAI_API_KEY" .env | wc -c
+            echo "=== Restarting PM2 ==="
+            pm2 kill 2>/dev/null || true
+            sleep 2
+            fuser -k 3000/tcp 2>/dev/null || true
+            sleep 1
+            pm2 start npm --name "first-seller-crm" -- start
+            sleep 5
+            pm2 status
 
             echo ""
-            echo "=== Test transcribe ==="
+            echo "=== Testing transcription ==="
             curl -s -X POST http://localhost:3000/api/calls/cmmdk6dus0399cqvd3jkj5q8r/transcribe
             echo ""
-            sleep 45
+            sleep 60
 
             echo ""
-            echo "=== PM2 out logs (last 40) ==="
-            tail -40 ~/.pm2/logs/first-seller-crm-out.log 2>/dev/null || pm2 logs first-seller-crm --lines 40 --nostream 2>/dev/null
-
-            echo ""
-            echo "=== PM2 error logs (last 20) ==="
-            tail -20 ~/.pm2/logs/first-seller-crm-error.log 2>/dev/null
+            echo "=== PM2 logs after transcription ==="
+            pm2 logs first-seller-crm --lines 40 --nostream 2>/dev/null
