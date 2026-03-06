@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Logs and Re-sync
+      - name: Check Logs
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -19,16 +19,23 @@ jobs:
           script: |
             cd /var/www/first-seller-crm
 
-            echo "=== Recording files count ==="
-            ls public/recordings/*.mp3 2>/dev/null | wc -l
+            echo "=== Recording file exists? ==="
+            ls -la public/recordings/MjYxMzI4MzU2ODE__.mp3 2>/dev/null || echo "FILE NOT FOUND"
 
             echo ""
-            echo "=== Triggering sync ==="
-            curl -s http://localhost:3000/api/mango/sync
-            echo ""
-
-            sleep 10
+            echo "=== OPENAI_API_KEY length ==="
+            grep "OPENAI_API_KEY" .env | wc -c
 
             echo ""
-            echo "=== Last 50 PM2 logs ==="
-            pm2 logs first-seller-crm --lines 50 --nostream 2>/dev/null
+            echo "=== Test transcribe ==="
+            curl -s -X POST http://localhost:3000/api/calls/cmmdk6dus0399cqvd3jkj5q8r/transcribe
+            echo ""
+            sleep 45
+
+            echo ""
+            echo "=== PM2 out logs (last 40) ==="
+            tail -40 ~/.pm2/logs/first-seller-crm-out.log 2>/dev/null || pm2 logs first-seller-crm --lines 40 --nostream 2>/dev/null
+
+            echo ""
+            echo "=== PM2 error logs (last 20) ==="
+            tail -20 ~/.pm2/logs/first-seller-crm-error.log 2>/dev/null
