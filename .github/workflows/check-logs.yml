@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check PM2 Logs
+      - name: Check PM2 Logs and Environment
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -17,13 +17,28 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
           script: |
+            cd /var/www/first-seller-crm
+
             echo "=== PM2 Status ==="
             pm2 status
 
             echo ""
-            echo "=== Last 100 lines of app logs ==="
-            pm2 logs first-seller-crm --lines 100 --nostream
+            echo "=== OPENAI_API_KEY in .env? ==="
+            grep -c "OPENAI_API_KEY" .env 2>/dev/null && echo "YES - key found" || echo "NO - missing!"
 
             echo ""
-            echo "=== Checking Mango sync endpoint ==="
-            curl -s http://localhost:3001/api/mango/sync | head -50
+            echo "=== TWENTY_API_TOKEN in .env? ==="
+            grep -c "TWENTY_API_TOKEN" .env 2>/dev/null && echo "YES - token found" || echo "NO - missing!"
+
+            echo ""
+            echo "=== Last 80 lines of app logs ==="
+            pm2 logs first-seller-crm --lines 80 --nostream 2>/dev/null || echo "No logs"
+
+            echo ""
+            echo "=== Test transcribe trigger ==="
+            curl -s -X POST http://localhost:3000/api/calls/cmmdiqzu9037ncqvdwiffdalb/transcribe
+            echo ""
+            sleep 40
+            echo ""
+            echo "=== Logs after transcribe attempt ==="
+            pm2 logs first-seller-crm --lines 30 --nostream 2>/dev/null
