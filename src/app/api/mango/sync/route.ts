@@ -716,9 +716,55 @@ async function resyncToTwenty(): Promise<{ synced: number; skipped: number }> {
   return { synced, skipped }
 }
 
+/** Исправление отсутствующих файлов записей — сброс recordingUrl для повторной загрузки */
+async function fixMissingRecordings(): Promise<{ checked: number; fixed: number }> {
+  const calls = await prisma.call.findMany({
+    where: {
+      recordingUrl: { not: null },
+      status: 'COMPLETED',
+    },
+    select: { id: true, recordingUrl: true, externalId: true },
+  })
+
+  let checked = 0
+  let fixed = 0
+
+  for (const call of calls) {
+    if (!call.recordingUrl || !call.recordingUrl.startsWith('/recordings/')) continue
+    checked++
+    const filePath = path.join(process.cwd(), 'public', call.recordingUrl)
+    if (!fs.existsSync(filePath)) {
+      // Пробуем перекачать через Mango API
+      if (call.externalId) {
+        console.log(`[fix] Re-downloading recording for ${call.externalId}...`)
+        const newUrl = await getRecordingUrl(call.externalId, '')
+        if (newUrl) {
+          await prisma.call.update({ where: { id: call.id }, data: { recordingUrl: newUrl } })
+          fixed++
+          console.log(`[fix] Re-downloaded: ${newUrl}`)
+          continue
+        }
+      }
+      // Не удалось скачать — сбрасываем URL
+      await prisma.call.update({ where: { id: call.id }, data: { recordingUrl: null } })
+      console.log(`[fix] Reset missing recording for call ${call.id}`)
+      fixed++
+    }
+  }
+
+  return { checked, fixed }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)
+
+    // ?fix_recordings=true — проверить и перекачать отсутствующие записи
+    if (url.searchParams.get('fix_recordings') === 'true') {
+      const result = await fixMissingRecordings()
+      return NextResponse.json({ success: true, ...result })
+    }
+
     // ?resync_twenty=true — пересинхронизировать все звонки в Twenty CRM
     if (url.searchParams.get('resync_twenty') === 'true') {
       const result = await resyncToTwenty()
