@@ -649,14 +649,14 @@ async function updateMissingRecordings(): Promise<number> {
   return 0
 }
 
-async function performSync() {
+async function performSync(minutes?: number) {
   console.log('🚀 Mango sync v2.0 - with phone normalization')
 
   // Сначала обновляем записи для существующих звонков
   const recordingsUpdated = await updateMissingRecordings()
 
-  // Получаем звонки за последние 24 часа (увеличено для обновления старых записей)
-  const calls = await getRecentCalls(24 * 60)
+  // Получаем звонки за указанный период (по умолчанию 24 часа)
+  const calls = await getRecentCalls(minutes || 24 * 60)
 
   if (!calls || calls.length === 0) {
     return {
@@ -737,7 +737,7 @@ async function fixMissingRecordings(): Promise<{ checked: number; fixed: number 
       // Пробуем перекачать через Mango API
       if (call.externalId) {
         console.log(`[fix] Re-downloading recording for ${call.externalId}...`)
-        const newUrl = await getRecordingUrl(call.externalId, '')
+        const newUrl = await getRecordingUrl(call.externalId, call.externalId)
         if (newUrl) {
           await prisma.call.update({ where: { id: call.id }, data: { recordingUrl: newUrl } })
           fixed++
@@ -771,7 +771,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, ...result })
     }
 
-    const result = await performSync()
+    // ?minutes=N — синхронизировать за последние N минут (макс 60 дней)
+    const minutesParam = url.searchParams.get('minutes')
+    const minutes = minutesParam ? Math.min(parseInt(minutesParam), 60 * 24 * 60) : undefined
+    const result = await performSync(minutes)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error in Mango sync:', error)
