@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check PM2 Logs and Environment
+      - name: Check Logs and Re-sync
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -19,26 +19,16 @@ jobs:
           script: |
             cd /var/www/first-seller-crm
 
-            echo "=== PM2 Status ==="
-            pm2 status
+            echo "=== Recording files count ==="
+            ls public/recordings/*.mp3 2>/dev/null | wc -l
 
             echo ""
-            echo "=== OPENAI_API_KEY in .env? ==="
-            grep -c "OPENAI_API_KEY" .env 2>/dev/null && echo "YES - key found" || echo "NO - missing!"
+            echo "=== Triggering sync ==="
+            curl -s http://localhost:3000/api/mango/sync
+            echo ""
+
+            sleep 10
 
             echo ""
-            echo "=== TWENTY_API_TOKEN in .env? ==="
-            grep -c "TWENTY_API_TOKEN" .env 2>/dev/null && echo "YES - token found" || echo "NO - missing!"
-
-            echo ""
-            echo "=== Last 80 lines of app logs ==="
-            pm2 logs first-seller-crm --lines 80 --nostream 2>/dev/null || echo "No logs"
-
-            echo ""
-            echo "=== Test transcribe trigger ==="
-            curl -s -X POST http://localhost:3000/api/calls/cmmdiqzu9037ncqvdwiffdalb/transcribe
-            echo ""
-            sleep 40
-            echo ""
-            echo "=== Logs after transcribe attempt ==="
-            pm2 logs first-seller-crm --lines 30 --nostream 2>/dev/null
+            echo "=== Last 50 PM2 logs ==="
+            pm2 logs first-seller-crm --lines 50 --nostream 2>/dev/null
