@@ -7,6 +7,7 @@ import path from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { syncCallToTwenty, syncRecordingToTwenty } from '@/services/twenty-crm'
+import { transcribeCallRecording } from '@/services/mango'
 
 const execAsync = promisify(exec)
 
@@ -430,6 +431,14 @@ async function syncCalls(calls: any[]): Promise<number> {
               recordingUrl,
             }).catch(err => console.error('[twenty] Recording sync failed:', err))
 
+            // Автоматическая транскрибация
+            if (recordingUrl.startsWith('/recordings/')) {
+              setTimeout(() => {
+                transcribeCallRecording(existingCall.id, recordingUrl).catch(err =>
+                  console.error('[transcribe] Auto-transcription failed:', err))
+              }, 2000)
+            }
+
             syncedCount++
           }
         } else {
@@ -618,6 +627,14 @@ async function syncCalls(calls: any[]): Promise<number> {
         entryId,
         recordingUrl: recordingUrl || undefined,
       }).catch(err => console.error('[twenty] Batch sync failed:', err))
+
+      // Автоматическая транскрибация нового звонка
+      if (recordingUrl && recordingUrl.startsWith('/recordings/')) {
+        setTimeout(() => {
+          transcribeCallRecording(call.id, recordingUrl).catch(err =>
+            console.error('[transcribe] Auto-transcription failed:', err))
+        }, 3000)
+      }
 
       syncedCount++
       console.log(`✅ Synced call ${entryId}`)
