@@ -1,6 +1,8 @@
 import crypto from 'crypto'
 import axios from 'axios'
 import prisma from '@/lib/prisma'
+import { syncCallToTwenty, syncRecordingToTwenty, updateTwentyFromTranscription } from './twenty-crm'
+import { transcribeAndAnalyzeCall } from './transcription'
 
 const MANGO_API_URL = 'https://app.mango-office.ru/vpbx'
 
@@ -415,6 +417,17 @@ export async function handleMangoWebhook(event: MangoCallEvent): Promise<void> {
           }
         }
 
+        // Fire-and-forget: синхронизируем звонок в Twenty CRM
+        syncCallToTwenty({
+          direction: isIncoming ? 'IN' : 'OUT',
+          phone: clientPhone,
+          duration,
+          status,
+          mangoCallId: call_id,
+          entryId: event.entry_id,
+          recordingUrl: call.recordingUrl || undefined,
+        }).catch(err => console.error('[twenty] Background sync failed:', err))
+
         break
     }
   } catch (error) {
@@ -481,6 +494,21 @@ export async function handleMangoRecording(event: MangoRecordingEvent): Promise<
 
       console.log(`✅ Recording URL saved for call ${call.id}`)
 
+      // Fire-and-forget: синхронизируем запись в Twenty CRM
+      if (call.phone) {
+        syncRecordingToTwenty({
+          direction: (call.direction as 'IN' | 'OUT') || 'IN',
+          phone: call.phone,
+          duration: call.duration || 0,
+          status: call.status || 'COMPLETED',
+          mangoCallId: call.mangoCallId || call_id || '',
+          entryId: call.externalId || entry_id || undefined,
+          recordingUrl,
+        }).catch(err =>
+          console.error('[twenty] Recording sync failed:', err),
+        )
+      }
+
       // Если звонок связан со сделкой, обновляем системное событие
       if (call.dealId) {
         // Находим системное событие о звонке в сделке
@@ -524,44 +552,40 @@ export async function handleMangoRecording(event: MangoRecordingEvent): Promise<
   }
 }
 
-// Транскрибация звонка (заглушка для будущей интеграции)
+// Транскрибация звонка через Whisper + автозаполнение Twenty CRM
 export async function transcribeCallRecording(
   callId: string,
   recordingUrl: string
 ): Promise<void> {
   try {
-    console.log(`🎙️ Transcription requested for call ${callId}`)
-    console.log(`Recording URL: ${recordingUrl}`)
+    if (!process.env.OPENAI_API_KEY) {
+      console.log(`[transcribe] Skipped — no OPENAI_API_KEY`)
+      return
+    }
 
-    // TODO: Здесь будет интеграция с OpenAI Whisper API или другим сервисом транскрибации
-    // 1. Скачать аудиофайл по recordingUrl
-    // 2. Отправить на транскрибацию (OpenAI Whisper, Google Speech-to-Text, и т.д.)
-    // 3. Получить текст транскрибации
-    // 4. Сохранить в CallTranscription
-    // 5. Опционально: сделать анализ sentiment, извлечь ключевые слова
-    // 6. Обновить системное событие в сделке с текстом транскрибации
+    console.log(`[transcribe] Starting for call ${callId}`)
 
-    // Пример будущей реализации:
-    // const audioBuffer = await downloadAudio(recordingUrl)
-    // const transcription = await openai.audio.transcriptions.create({
-    //   file: audioBuffer,
-    //   model: 'whisper-1',
-    //   language: 'ru'
-    // })
-    //
-    // await prisma.callTranscription.create({
-    //   data: {
-    //     callId,
-    //     text: transcription.text,
-    //     summary: await generateSummary(transcription.text),
-    //     sentiment: await analyzeSentiment(transcription.text),
-    //     keywords: JSON.stringify(await extractKeywords(transcription.text))
-    //   }
-    // })
+    // 1. Транскрибация + GPT анализ
+    const result = await transcribeAndAnalyzeCall(callId)
+    if (!result) {
+      console.log(`[transcribe] No result for ${callId}`)
+      return
+    }
 
-    console.log(`⏸️ Transcription skipped - not implemented yet`)
+    console.log(`[transcribe] Got analysis: name="${result.analysis.clientName}", agreements="${result.analysis.agreements?.slice(0, 60)}"`)
+
+    // 2. Обновление Twenty CRM
+    const call = await prisma.call.findUnique({ where: { id: callId } })
+    if (!call?.phone) return
+
+    await updateTwentyFromTranscription(
+      { phone: call.phone, mangoCallId: call.mangoCallId, direction: call.direction },
+      result.analysis,
+    )
+
+    console.log(`[transcribe] Done for call ${callId}`)
   } catch (error) {
-    console.error('Error transcribing call recording:', error)
+    console.error('[transcribe] Error:', error instanceof Error ? error.message : error)
   }
 }
 

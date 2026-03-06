@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import crypto from 'crypto'
 import axios from 'axios'
@@ -6,6 +6,7 @@ import fs from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import { syncCallToTwenty, syncRecordingToTwenty } from '@/services/twenty-crm'
 
 const execAsync = promisify(exec)
 
@@ -260,7 +261,7 @@ function extractRecordingId(recordsField: string): string | null {
 async function getRecordingUrl(entryId: string, recordsField?: string): Promise<string | null> {
   console.log(`🎙️ Getting recording URL for entry: ${entryId}, records: ${recordsField}`)
 
-  if (!recordsField || recordsField === '' || recordsField === '0') {
+  if (!recordsField || recordsField === '' || recordsField === '0' || recordsField === '[]') {
     console.log(`⚠️ No records field for: ${entryId}`)
     return null
   }
@@ -273,6 +274,11 @@ async function getRecordingUrl(entryId: string, recordsField?: string): Promise<
   }
 
   console.log(`🎙️ Raw recording_id (base64): ${rawRecordingId}`)
+
+  if (!rawRecordingId) {
+    console.log(`⚠️ Empty recording_id after parsing for: ${entryId}`)
+    return null
+  }
 
   // Пытаемся скачать запись через API
   const localUrl = await downloadRecording(rawRecordingId, entryId)
@@ -399,6 +405,18 @@ async function syncCalls(calls: any[]): Promise<number> {
               data: { recordingUrl }
             })
             console.log(`🎙️ Updated recording URL for existing call: ${entryId}`)
+
+            // Синхронизируем запись в Twenty CRM
+            syncRecordingToTwenty({
+              direction: (existingCall.direction as 'IN' | 'OUT') || 'IN',
+              phone: existingCall.phone || '',
+              duration: existingCall.duration || 0,
+              status: existingCall.status || 'COMPLETED',
+              mangoCallId: existingCall.mangoCallId || entryId,
+              entryId,
+              recordingUrl,
+            }).catch(err => console.error('[twenty] Recording sync failed:', err))
+
             syncedCount++
           }
         } else {
@@ -577,6 +595,17 @@ async function syncCalls(calls: any[]): Promise<number> {
         console.log(`✅ Added call to deal activity: ${call.id}`)
       }
 
+      // Fire-and-forget: синхронизируем в Twenty CRM
+      syncCallToTwenty({
+        direction: isIncoming ? 'IN' : 'OUT',
+        phone: clientPhone,
+        duration,
+        status,
+        mangoCallId: entryId,
+        entryId,
+        recordingUrl: recordingUrl || undefined,
+      }).catch(err => console.error('[twenty] Batch sync failed:', err))
+
       syncedCount++
       console.log(`✅ Synced call ${entryId}`)
     } catch (error) {
@@ -637,8 +666,52 @@ async function performSync() {
   }
 }
 
-export async function GET() {
+/** Пересинхронизация всех звонков с записями в Twenty CRM (one-off) */
+async function resyncToTwenty(): Promise<{ synced: number; skipped: number }> {
+  const calls = await prisma.call.findMany({
+    where: {
+      status: 'COMPLETED',
+      duration: { gt: 0 },
+      phone: { not: null },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 1000,
+  })
+
+  let synced = 0
+  let skipped = 0
+
+  for (const call of calls) {
+    if (!call.phone) { skipped++; continue }
+    try {
+      await syncCallToTwenty({
+        direction: (call.direction as 'IN' | 'OUT') || 'IN',
+        phone: call.phone,
+        duration: call.duration || 0,
+        status: call.status || 'COMPLETED',
+        mangoCallId: call.mangoCallId || call.externalId || call.id,
+        entryId: call.externalId || undefined,
+        recordingUrl: call.recordingUrl || undefined,
+      })
+      synced++
+    } catch (err) {
+      console.error(`[twenty] Resync failed for ${call.id}:`, err instanceof Error ? err.message : err)
+      skipped++
+    }
+  }
+
+  return { synced, skipped }
+}
+
+export async function GET(request: NextRequest) {
   try {
+    const url = new URL(request.url)
+    // ?resync_twenty=true — пересинхронизировать все звонки в Twenty CRM
+    if (url.searchParams.get('resync_twenty') === 'true') {
+      const result = await resyncToTwenty()
+      return NextResponse.json({ success: true, ...result })
+    }
+
     const result = await performSync()
     return NextResponse.json(result)
   } catch (error) {
